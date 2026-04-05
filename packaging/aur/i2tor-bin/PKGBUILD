@@ -1,0 +1,19 @@
+pkgname=i2tor-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Desktop launcher that combines Tor Browser and Java I2P without forking Tor Browser'
+arch=('x86_64')
+url='https://github.com/REPO_OWNER/i2tor'
+license=('custom')
+depends=('gtk3' 'glib2' 'libx11' 'libxcursor' 'libxfixes' 'libxinerama' 'libxrandr' 'mesa' 'gpgme')
+optdepends=('xdg-utils: desktop integration helpers')
+provides=('i2tor')
+conflicts=('i2tor')
+source=("i2tor-${pkgver}-linux-x86_64.AppImage::https://github.com/REPO_OWNER/i2tor/releases/download/v${pkgver}/i2tor-${pkgver}-linux-x86_64.AppImage")
+sha256sums=('REPLACE_WITH_RELEASE_SHA256')
+
+package() {
+  install -Dm755 "${srcdir}/i2tor-${pkgver}-linux-x86_64.AppImage" "${pkgdir}/opt/i2tor/i2tor.AppImage"
+  install -dm755 "${pkgdir}/usr/bin"
+  ln -s "/opt/i2tor/i2tor.AppImage" "${pkgdir}/usr/bin/i2tor"
+}

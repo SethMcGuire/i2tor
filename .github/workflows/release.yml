@@ -1,0 +1,119 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build AppImage
+        run: |
+          chmod +x packaging/linux/build-appimage.sh
+          VERSION="${GITHUB_REF_NAME#v}" OUTPUT_NAME="i2tor-${GITHUB_REF_NAME#v}-linux-x86_64.AppImage" packaging/linux/build-appimage.sh
+      - name: Generate release checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+      - name: Import release signing key
+        if: ${{ secrets.RELEASE_GPG_PRIVATE_KEY != '' && secrets.RELEASE_GPG_PASSPHRASE != '' }}
+        env:
+          RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+        run: |
+          export GNUPGHOME="$(mktemp -d)"
+          echo "$RELEASE_GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --list-secret-keys
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+      - name: Sign AppImage and checksums
+        if: ${{ env.GNUPGHOME != '' }}
+        env:
+          RELEASE_GPG_KEY_ID: ${{ secrets.RELEASE_GPG_KEY_ID }}
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
+        run: |
+          cd dist
+          for artifact in *.AppImage SHA256SUMS; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$RELEASE_GPG_PASSPHRASE" --local-user "$RELEASE_GPG_KEY_ID" --armor --detach-sign "$artifact"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: i2tor-appimage
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.asc
+            dist/SHA256SUMS
+            dist/SHA256SUMS.asc
+
+  build-binaries:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            asset: i2tor-windows-amd64.exe
+          - goos: darwin
+            goarch: amd64
+            asset: i2tor-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            asset: i2tor-darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: |
+          mkdir -p dist
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o dist/${{ matrix.asset }} ./cmd/i2tor
+      - name: Generate binary checksum
+        run: |
+          cd dist
+          sha256sum ${{ matrix.asset }} > ${{ matrix.asset }}.sha256
+      - name: Import release signing key
+        if: ${{ secrets.RELEASE_GPG_PRIVATE_KEY != '' && secrets.RELEASE_GPG_PASSPHRASE != '' }}
+        env:
+          RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+        run: |
+          export GNUPGHOME="$(mktemp -d)"
+          echo "$RELEASE_GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --list-secret-keys
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+      - name: Sign binary and checksum
+        if: ${{ env.GNUPGHOME != '' }}
+        env:
+          RELEASE_GPG_KEY_ID: ${{ secrets.RELEASE_GPG_KEY_ID }}
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
+        run: |
+          cd dist
+          for artifact in "${{ matrix.asset }}" "${{ matrix.asset }}.sha256"; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$RELEASE_GPG_PASSPHRASE" --local-user "$RELEASE_GPG_KEY_ID" --armor --detach-sign "$artifact"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: |
+            dist/${{ matrix.asset }}
+            dist/${{ matrix.asset }}.sha256
+            dist/${{ matrix.asset }}.asc
+            dist/${{ matrix.asset }}.sha256.asc
+
+  publish:
+    runs-on: ubuntu-latest
+    needs:
+      - appimage
+      - build-binaries
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

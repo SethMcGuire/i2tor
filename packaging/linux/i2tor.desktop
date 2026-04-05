@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=i2tor
+Comment=Launch Tor Browser with I2P routing for .i2p sites
+Exec=i2tor desktop
+Icon=i2tor
+Terminal=false
+Categories=Network;System;
+StartupNotify=true

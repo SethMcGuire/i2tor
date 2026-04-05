@@ -1,0 +1,39 @@
+{
+  "app_version": "0.1.0",
+  "os": "linux",
+  "arch": "x86_64",
+  "tor_browser": {
+    "source": "managed",
+    "version": "14.5.1",
+    "artifact_url": "https://www.torproject.org/dist/torbrowser/14.5.1/tor-browser-linux-x86_64-14.5.1.tar.xz",
+    "artifact_path": "/home/user/.local/share/i2tor/downloads/tor-browser-linux-x86_64-14.5.1.tar.xz",
+    "checksum_verified": true
+  },
+  "i2p": {
+    "source": "managed",
+    "version": "i2p-2.11.0",
+    "artifact_url": "https://github.com/i2p/i2p.i2p/releases/download/i2p-2.11.0/i2pinstall_2.11.0.jar",
+    "artifact_path": "/home/user/.local/share/i2tor/downloads/i2pinstall_2.11.0.jar",
+    "checksum_verified": true
+  },
+  "java": {
+    "source": "managed",
+    "version": "17.0.18+8",
+    "artifact_url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.18%2B8/OpenJDK17U-jre_x64_linux_hotspot_17.0.18_8.tar.gz",
+    "artifact_path": "/home/user/.local/share/i2tor/downloads/OpenJDK17U-jre_x64_linux_hotspot_17.0.18_8.tar.gz",
+    "checksum_verified": true
+  },
+  "launcher_managed_i2p": {
+    "pid": 12345,
+    "started_at": "2026-01-02T03:04:05Z",
+    "command": "/home/user/.local/share/i2tor/runtime/java/bin/java",
+    "args": [
+      "-Di2p.dir.base=/home/user/.local/share/i2tor/runtime/i2p",
+      "-Di2p.dir.config=/home/user/.local/share/i2tor/runtime/i2p",
+      "-cp",
+      "/home/user/.local/share/i2tor/runtime/i2p/lib/*.jar",
+      "net.i2p.router.RouterLaunch"
+    ],
+    "owns": true
+  }
+}

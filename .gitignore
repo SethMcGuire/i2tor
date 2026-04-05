@@ -1,0 +1,9 @@
+# Local build outputs
+/i2tor
+/dist/
+
+# Downloaded packaging tools
+/.tools/
+
+# Local editor or Codex scratch files
+/.codex

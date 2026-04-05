@@ -1,0 +1,7 @@
+{
+  "reuse_existing_tor_browser": true,
+  "reuse_existing_i2p": true,
+  "auto_check_updates": true,
+  "data_dir": "",
+  "log_level": "info"
+}
