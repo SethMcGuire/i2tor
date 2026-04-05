@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 APPDIR="$ROOT_DIR/dist/AppDir"
 APPIMAGETOOL="${APPIMAGETOOL:-$ROOT_DIR/.tools/appimagetool}"
+APPIMAGETOOL_EXTRACT_DIR="${APPIMAGETOOL_EXTRACT_DIR:-$ROOT_DIR/.tools/appimagetool-extracted}"
 VERSION="${VERSION:-dev}"
 OUTPUT_NAME="${OUTPUT_NAME:-i2tor-${VERSION}-linux-x86_64.AppImage}"
 
@@ -27,4 +28,19 @@ if [ ! -x "$APPIMAGETOOL" ]; then
   chmod +x "$APPIMAGETOOL"
 fi
 
-ARCH=x86_64 "$APPIMAGETOOL" "$APPDIR" "$ROOT_DIR/dist/$OUTPUT_NAME"
+run_appimagetool() {
+  ARCH=x86_64 "$APPIMAGETOOL" "$APPDIR" "$ROOT_DIR/dist/$OUTPUT_NAME"
+}
+
+if run_appimagetool; then
+  exit 0
+fi
+
+rm -rf "$APPIMAGETOOL_EXTRACT_DIR"
+mkdir -p "$APPIMAGETOOL_EXTRACT_DIR"
+(
+  cd "$APPIMAGETOOL_EXTRACT_DIR"
+  "$APPIMAGETOOL" --appimage-extract >/dev/null
+)
+
+ARCH=x86_64 "$APPIMAGETOOL_EXTRACT_DIR/squashfs-root/AppRun" "$APPDIR" "$ROOT_DIR/dist/$OUTPUT_NAME"
