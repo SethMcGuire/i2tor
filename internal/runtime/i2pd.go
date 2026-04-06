@@ -18,6 +18,9 @@ func StartI2P(ctx context.Context, logger *logging.Logger, i2pInstall, javaInsta
 	if err != nil {
 		return ManagedProcess{}, fmt.Errorf("resolve Java executable for I2P: %w", err)
 	}
+	if err := install.NormalizeManagedI2PPortableConfig(i2pInstall.InstallDir, javaInstall); err != nil {
+		return ManagedProcess{}, fmt.Errorf("normalize managed I2P install: %w", err)
+	}
 	if err := ensureManagedI2PClientConfig(i2pInstall.InstallDir); err != nil {
 		return ManagedProcess{}, fmt.Errorf("prepare managed I2P client config: %w", err)
 	}

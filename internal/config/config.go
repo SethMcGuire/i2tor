@@ -13,6 +13,7 @@ type Config struct {
 	ReuseExistingTorBrowser bool   `json:"reuse_existing_tor_browser"`
 	ReuseExistingI2P        bool   `json:"reuse_existing_i2p"`
 	AutoCheckUpdates        bool   `json:"auto_check_updates"`
+	AllowLocalhostAccess    bool   `json:"allow_localhost_access"`
 	DataDir                 string `json:"data_dir"`
 	LogLevel                string `json:"log_level"`
 }

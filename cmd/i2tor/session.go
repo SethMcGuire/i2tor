@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"i2tor/internal/apppaths"
@@ -17,8 +18,9 @@ import (
 type progressReporter func(stage, detail string, value float64)
 
 const (
-	i2pReadyTimeout = 90 * time.Second
-	torReadyTimeout = 30 * time.Second
+	i2pReadyTimeout    = 90 * time.Second
+	torReadyTimeout    = 30 * time.Second
+	profileDisplayName = "i2tor Dedicated Profile"
 )
 
 type launcherSession struct {
@@ -79,7 +81,17 @@ func startLauncherSession(ctx context.Context, logger *logging.Logger, cfg confi
 		_ = rt.ShutdownManagedI2P(context.Background(), i2pProc)
 		return launcherSession{}, fmt.Errorf("failed to write PAC file at %s: %w", paths.PACFile, err)
 	}
-	if err := profile.WriteDedicatedProfilePrefs(ctx, paths.ProfileDir, paths.PACFile); err != nil {
+	startPagePath, err := profile.WriteStartPage(ctx, filepath.Join(paths.ProfileDir, "start-page"), profile.Options{ProfileDisplayName: profileDisplayName})
+	if err != nil {
+		_ = rt.ShutdownManagedTor(context.Background(), torProc)
+		_ = rt.ShutdownManagedI2P(context.Background(), i2pProc)
+		return launcherSession{}, fmt.Errorf("failed to write managed start page in %s: %w", paths.ProfileDir, err)
+	}
+	if err := profile.WriteDedicatedProfilePrefs(ctx, paths.ProfileDir, paths.PACFile, profile.Options{
+		AllowLocalhostAccess: cfg.AllowLocalhostAccess,
+		ProfileDisplayName:   profileDisplayName,
+		HomePagePath:         startPagePath,
+	}); err != nil {
 		_ = rt.ShutdownManagedTor(context.Background(), torProc)
 		_ = rt.ShutdownManagedI2P(context.Background(), i2pProc)
 		return launcherSession{}, fmt.Errorf("failed to write dedicated profile prefs in %s: %w", paths.ProfileDir, err)

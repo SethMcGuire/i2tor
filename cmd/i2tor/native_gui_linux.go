@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -58,6 +59,30 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 	quitButton := widget.NewButtonWithIcon("Quit", theme.CancelIcon(), func() {
 		w.Close()
 	})
+	localhostWarning := widget.NewLabel("Advanced: enables access to localhost in the launcher-owned Tor Browser profile. Off by default because it weakens local-service isolation.")
+	localhostWarning.Wrapping = fyne.TextWrapWord
+	localhostToggle := widget.NewCheck("Allow localhost access", nil)
+	localhostToggle.Checked = cfg.AllowLocalhostAccess
+	localhostToggle.OnChanged = func(enabled bool) {
+		nextCfg := cfg
+		nextCfg.AllowLocalhostAccess = enabled
+		if err := config.Save(context.Background(), paths.ConfigPath, nextCfg); err != nil {
+			localhostToggle.SetChecked(cfg.AllowLocalhostAccess)
+			showErrorDialog(w, fmt.Errorf("save localhost access setting: %w", err))
+			return
+		}
+		cfg = nextCfg
+		if enabled {
+			detail.SetText("Localhost access enabled for future launches of the dedicated i2tor profile. Restart the browser session for it to take effect.")
+		} else {
+			detail.SetText("Localhost access disabled. Restart the browser session for the stricter profile settings to take effect.")
+		}
+	}
+	advancedSection := widget.NewCard(
+		"Advanced",
+		"These settings apply only to the dedicated i2tor profile.",
+		container.NewVBox(localhostToggle, localhostWarning),
+	)
 
 	actionRow := container.NewHBox(installButton, updateButton, startButton, startNowButton, logsButton, layout.NewSpacer(), quitButton)
 	content := container.NewBorder(
@@ -71,6 +96,8 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 			stageLabel,
 			progress,
 			detail,
+			widget.NewSeparator(),
+			advancedSection,
 		),
 	)
 	w.SetContent(container.NewPadded(content))

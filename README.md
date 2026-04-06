@@ -2,6 +2,8 @@
 
 `i2tor` is a Go desktop launcher that composes Tor Browser and Java I2P without forking Tor Browser, patching its source, or touching system-wide proxy settings. The launcher owns a dedicated Tor Browser profile, generates a PAC file that sends `.i2p` traffic to the local I2P HTTP proxy on `127.0.0.1:4444`, and keeps all other browser traffic on Tor Browser's SOCKS proxy at `127.0.0.1:9150`.
 
+`i2tor` is an independent project and is not affiliated with, endorsed by, or sponsored by the Tor Project or the I2P Project.
+
 ## Why a launcher instead of a browser fork
 
 The launcher approach keeps browser maintenance and security updates aligned with upstream Tor Browser. `i2tor` only manages process orchestration, profile isolation, PAC generation, managed installs, and fail-closed startup behavior for `.i2p` routing.
@@ -99,12 +101,15 @@ Default config shape:
   "reuse_existing_tor_browser": true,
   "reuse_existing_i2p": true,
   "auto_check_updates": true,
+  "allow_localhost_access": false,
   "data_dir": "",
   "log_level": "info"
 }
 ```
 
 Sample files are in [testdata/config.sample.json](/home/seth/Documents/i2tor/testdata/config.sample.json) and [testdata/manifest.sample.json](/home/seth/Documents/i2tor/testdata/manifest.sample.json).
+
+`allow_localhost_access` is an advanced, off-by-default opt-in. When enabled, `i2tor` writes localhost-related proxy prefs into its dedicated Tor Browser profile so the launcher-owned browser can reach loopback services. This weakens the default local-service isolation posture and should only be enabled deliberately.
 
 ## Updates and GUI
 
@@ -165,6 +170,7 @@ when release signing secrets are configured in GitHub Actions.
 - Windows and macOS managed install paths are isolated, but Linux is the only path exercised by the included integration tests.
 - Managed I2P install currently depends on upstream Java I2P installer behavior and a managed or existing Java 17+ runtime.
 - Signature verification depends on a working `gpg` binary at runtime.
+- `allow_localhost_access` weakens Tor Browser’s localhost isolation and is intentionally off by default.
 - Reuse of existing installs depends on heuristic path detection and explicit opt-in via config.
 
 ## Security notes
@@ -174,6 +180,7 @@ when release signing secrets are configured in GitHub Actions.
 - The launcher tracks I2P process ownership in the manifest and does not intentionally kill unrelated I2P instances.
 - A managed Java runtime is installed automatically if Java 17+ is not already available.
 - Managed downloads are verified by checksum and signature before execution.
+- Localhost access remains blocked by default; enabling it is an advanced per-profile opt-in only.
 
 ## Packaging notes
 

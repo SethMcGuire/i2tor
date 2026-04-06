@@ -45,6 +45,10 @@ The generated PAC file routes only `.i2p` hostnames to `127.0.0.1:4444` and rout
 
 `i2tor` writes PAC and proxy preferences only into its dedicated profile under `runtime/profile/`. It does not modify default Firefox profiles, default Tor Browser profiles, or system-wide proxy settings.
 
+## Localhost access rule
+
+Localhost access stays disabled by default. If a user explicitly enables the advanced localhost option, it applies only to the dedicated `i2tor` profile and not to any global Tor Browser or Firefox profile. This option is intentionally off by default because it weakens the browser's protection against local service exposure.
+
 ## Process ownership rule
 
 The launcher records the PID and launch metadata for the I2P process it starts. On shutdown, it only attempts to terminate the I2P process that it owns. If an existing or already-running I2P instance was not started by the launcher, it should not be terminated by `i2tor`.

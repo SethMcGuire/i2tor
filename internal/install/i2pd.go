@@ -55,14 +55,14 @@ func installManagedI2P(ctx context.Context, paths apppaths.AppPaths, java Instal
 	if err := runI2PInstaller(ctx, java, artifactPath, stageDir); err != nil {
 		return InstalledApp{}, err
 	}
-	if err := configurePortableI2P(stageDir, java); err != nil {
-		return InstalledApp{}, err
-	}
 	if err := os.RemoveAll(paths.I2PRuntimeDir); err != nil {
 		return InstalledApp{}, fmt.Errorf("clear previous I2P install %q: %w", paths.I2PRuntimeDir, err)
 	}
 	if err := os.Rename(stageDir, paths.I2PRuntimeDir); err != nil {
 		return InstalledApp{}, fmt.Errorf("move I2P install into place %q: %w", paths.I2PRuntimeDir, err)
+	}
+	if err := NormalizeManagedI2PPortableConfig(paths.I2PRuntimeDir, java); err != nil {
+		return InstalledApp{}, err
 	}
 
 	execPath, err := InstalledApp{Name: "i2p", InstallDir: paths.I2PRuntimeDir}.ResolveExecutable()
@@ -247,7 +247,7 @@ func writeInstallerProperties(templatePath, destPath, installDir string) error {
 	return os.WriteFile(destPath, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
 }
 
-func configurePortableI2P(installDir string, java InstalledApp) error {
+func NormalizeManagedI2PPortableConfig(installDir string, java InstalledApp) error {
 	javaPath, err := java.ResolveExecutable()
 	if err != nil {
 		return fmt.Errorf("resolve Java runtime for portable I2P config: %w", err)
@@ -259,8 +259,14 @@ func configurePortableI2P(installDir string, java InstalledApp) error {
 	if err != nil {
 		return fmt.Errorf("read wrapper config %q: %w", wrapperPath, err)
 	}
+	wrapperLines = replaceInstallPathReferences(wrapperLines, installDir)
 	wrapperLines = setConfigLine(wrapperLines, "set.JAVA_HOME=", "set.JAVA_HOME="+javaHome)
 	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.command=", "wrapper.java.command="+javaPath)
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.classpath.1=", filepath.Join(installDir, "lib", "*.jar"))
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.library.path.1=", installDir)
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.library.path.2=", filepath.Join(installDir, "lib"))
+	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.2=", fmt.Sprintf("wrapper.java.additional.2=-Di2p.dir.base=%q", installDir))
+	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.2.stripquotes=", "wrapper.java.additional.2.stripquotes=TRUE")
 	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.3=", fmt.Sprintf("wrapper.java.additional.3=-Di2p.dir.pid=%q", installDir))
 	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.3.stripquotes=", "wrapper.java.additional.3.stripquotes=TRUE")
 	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.4=", fmt.Sprintf("wrapper.java.additional.4=-Di2p.dir.temp=%q", installDir))
@@ -277,12 +283,36 @@ func configurePortableI2P(installDir string, java InstalledApp) error {
 	if err != nil {
 		return fmt.Errorf("read i2prouter script %q: %w", routerPath, err)
 	}
+	routerLines = replaceInstallPathReferences(routerLines, installDir)
+	routerLines = setConfigLine(routerLines, "I2P=", fmt.Sprintf("I2P=%q", installDir))
 	routerLines = setConfigLine(routerLines, "I2P_CONFIG_DIR=", fmt.Sprintf("I2P_CONFIG_DIR=%q", installDir))
 	routerLines = uncommentAndSet(routerLines, "I2PTEMP=", fmt.Sprintf("I2PTEMP=%q", installDir))
 	routerLines = uncommentAndSet(routerLines, "PIDDIR=", fmt.Sprintf("PIDDIR=%q", installDir))
 	routerLines = uncommentAndSet(routerLines, "LOGDIR=", fmt.Sprintf("LOGDIR=%q", installDir))
 	if err := os.WriteFile(routerPath, []byte(strings.Join(routerLines, "\n")+"\n"), 0o755); err != nil {
 		return fmt.Errorf("write i2prouter script %q: %w", routerPath, err)
+	}
+
+	for _, scriptName := range []string{"runplain.sh", "eepget"} {
+		scriptPath := filepath.Join(installDir, scriptName)
+		scriptLines, err := readLines(scriptPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("read portable I2P script %q: %w", scriptPath, err)
+		}
+		scriptLines = replaceInstallPathReferences(scriptLines, installDir)
+		switch scriptName {
+		case "runplain.sh":
+			scriptLines = setConfigLine(scriptLines, "I2P=", fmt.Sprintf("I2P=%q", installDir))
+			scriptLines = setConfigLine(scriptLines, "I2PTEMP=", fmt.Sprintf("I2PTEMP=%q", installDir))
+		case "eepget":
+			scriptLines = setConfigLine(scriptLines, "I2P=", fmt.Sprintf("I2P=%q", installDir))
+		}
+		if err := os.WriteFile(scriptPath, []byte(strings.Join(scriptLines, "\n")+"\n"), 0o755); err != nil {
+			return fmt.Errorf("write portable I2P script %q: %w", scriptPath, err)
+		}
 	}
 	return nil
 }
@@ -308,4 +338,40 @@ func setConfigLine(lines []string, prefix, value string) []string {
 
 func uncommentAndSet(lines []string, prefix, value string) []string {
 	return setConfigLine(lines, prefix, value)
+}
+
+func replaceInstallPathReferences(lines []string, installDir string) []string {
+	for i, line := range lines {
+		lines[i] = rewriteInstallPathReference(line, installDir)
+	}
+	return lines
+}
+
+func rewriteInstallPathReference(line, installDir string) string {
+	for _, marker := range []string{"/runtime/i2p-install-", "/runtime/i2p/"} {
+		idx := strings.Index(line, marker)
+		if idx == -1 {
+			continue
+		}
+		start := strings.LastIndex(line[:idx], "/home/")
+		if start == -1 {
+			start = strings.LastIndex(line[:idx], "\"/home/")
+			if start == -1 {
+				start = strings.LastIndex(line[:idx], "='/home/")
+			}
+		}
+		if start == -1 {
+			continue
+		}
+		end := idx + len(marker)
+		for end < len(line) {
+			ch := line[end]
+			if ch == '"' || ch == '\'' || ch == ' ' || ch == '\t' {
+				break
+			}
+			end++
+		}
+		return line[:start] + installDir + line[end:]
+	}
+	return line
 }

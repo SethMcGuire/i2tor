@@ -15,6 +15,9 @@ func TestDefault(t *testing.T) {
 	if !cfg.AutoCheckUpdates {
 		t.Fatalf("AutoCheckUpdates = false, want true")
 	}
+	if cfg.AllowLocalhostAccess {
+		t.Fatalf("AllowLocalhostAccess = true, want false")
+	}
 	if cfg.LogLevel != "info" {
 		t.Fatalf("LogLevel = %q, want info", cfg.LogLevel)
 	}
