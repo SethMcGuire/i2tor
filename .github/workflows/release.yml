@@ -39,7 +39,7 @@ jobs:
       - name: Generate release checksums
         run: |
           cd dist
-          sha256sum * > SHA256SUMS
+          find . -maxdepth 1 -type f -printf '%P\n' | sort | xargs sha256sum > SHA256SUMS
       - name: Import release signing key
         env:
           RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
