@@ -116,15 +116,16 @@ func TestWriteStartPage(t *testing.T) {
 		`http://tortaxi2dev6xjwbaydqzla77rrnth7yn2oqzjfmiuwn5h6vsk2a4syd.onion/`,
 		`http://notbob.i2p`,
 		`Getting Started`,
+		`Fresh I2P sessions can take a few minutes before eepsites become consistently reachable.`,
 		`not affiliated with, endorsed by, or sponsored by the Tor Project or the I2P Project`,
 		`Donations`,
 		`Tor and I2P make this possible. If you donate, please consider supporting those projects first.`,
 		`https://donate.torproject.org/`,
 		`https://i2p.net/en/financial-support/`,
 		`buy me a beer`,
-		`YOUR_XMR_ADDRESS_HERE`,
-		`YOUR_BTC_ADDRESS_HERE`,
-		`YOUR_ETH_ADDRESS_HERE`,
+		donationAddressXMR,
+		donationAddressBTC,
+		donationAddressETH,
 	} {
 		if !strings.Contains(content, needle) {
 			t.Fatalf("missing start page content %q in %s", needle, content)

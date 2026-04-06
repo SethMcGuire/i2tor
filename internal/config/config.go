@@ -13,7 +13,9 @@ type Config struct {
 	ReuseExistingTorBrowser bool   `json:"reuse_existing_tor_browser"`
 	ReuseExistingI2P        bool   `json:"reuse_existing_i2p"`
 	AutoCheckUpdates        bool   `json:"auto_check_updates"`
+	AutoStartOnLaunch       bool   `json:"auto_start_on_launch"`
 	AllowLocalhostAccess    bool   `json:"allow_localhost_access"`
+	KeepI2PRunning          bool   `json:"keep_i2p_running"`
 	DataDir                 string `json:"data_dir"`
 	LogLevel                string `json:"log_level"`
 }
@@ -23,6 +25,8 @@ func Default() Config {
 		ReuseExistingTorBrowser: true,
 		ReuseExistingI2P:        true,
 		AutoCheckUpdates:        true,
+		AutoStartOnLaunch:       false,
+		KeepI2PRunning:          false,
 		LogLevel:                "info",
 	}
 }

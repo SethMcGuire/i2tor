@@ -57,9 +57,9 @@ func assessStartup(ctx context.Context, cfg config.Config, paths apppaths.AppPat
 	}
 
 	return startupAssessment{
-		AutoStart:        true,
+		AutoStart:        cfg.AutoStartOnLaunch,
 		PrimaryMessage:   "Everything is ready",
-		SecondaryMessage: "Starting Tor Browser with the dedicated I2P-aware profile.",
+		SecondaryMessage: "Dependencies are ready. Start when you are ready, or enable auto-start for future launches.",
 	}
 }
 

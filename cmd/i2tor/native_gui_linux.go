@@ -31,89 +31,201 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 
 	a := app.NewWithID("org.i2tor.launcher")
 	w := a.NewWindow("i2tor")
-	w.Resize(fyne.NewSize(760, 520))
+	w.Resize(fyne.NewSize(820, 760))
 
 	title := widget.NewRichTextFromMarkdown("# i2tor")
-	subtitle := widget.NewLabel("Checking installs, updates, and runtime readiness.")
-	subtitle.Wrapping = fyne.TextWrapWord
-	detail := widget.NewLabel("Starting assessment.")
-	detail.Wrapping = fyne.TextWrapWord
-	status := widget.NewLabel("Idle")
-	status.Wrapping = fyne.TextWrapWord
-	stageLabel := widget.NewLabel("Waiting")
-	stageLabel.Wrapping = fyne.TextWrapWord
+	tagline := widget.NewLabel("Launch Tor Browser with a dedicated I2P-aware profile.")
+	tagline.Wrapping = fyne.TextWrapWord
+	intro := widget.NewLabel("Install missing components, update managed ones, and change launcher settings in one place.")
+	intro.Wrapping = fyne.TextWrapWord
+
+	statusLine := widget.NewLabel("Status: Assessing")
+	statusLine.TextStyle = fyne.TextStyle{Bold: true}
+	primaryTitle := widget.NewLabel("Preparing desktop launcher")
+	primaryTitle.TextStyle = fyne.TextStyle{Bold: true}
+	primaryTitle.Wrapping = fyne.TextWrapWord
+	primaryBody := widget.NewLabel("Collecting status from the managed data directory.")
+	primaryBody.Wrapping = fyne.TextWrapWord
+	stageLine := widget.NewLabel("Assessing startup state")
+	stageLine.Wrapping = fyne.TextWrapWord
 	progress := widget.NewProgressBar()
 	progress.Min = 0
 	progress.Max = 1
-	progress.SetValue(0)
+	progress.SetValue(0.05)
 
-	installButton := widget.NewButtonWithIcon("Install", theme.DownloadIcon(), nil)
-	updateButton := widget.NewButtonWithIcon("Update", theme.ViewRefreshIcon(), nil)
-	startButton := widget.NewButtonWithIcon("Start", theme.MediaPlayIcon(), nil)
-	startNowButton := widget.NewButtonWithIcon("Start Current Version", theme.MediaPlayIcon(), nil)
+	torStatus := widget.NewLabel("Tor Browser: checking")
+	torStatus.Wrapping = fyne.TextWrapWord
+	javaStatus := widget.NewLabel("Java 17+: checking")
+	javaStatus.Wrapping = fyne.TextWrapWord
+	i2pStatus := widget.NewLabel("I2P: checking")
+	i2pStatus.Wrapping = fyne.TextWrapWord
+	updateStatus := widget.NewLabel("Updates: checking")
+	updateStatus.Wrapping = fyne.TextWrapWord
+
+	installButton := widget.NewButtonWithIcon("Install Missing Components", theme.DownloadIcon(), nil)
+	installButton.Importance = widget.HighImportance
+	updateButton := widget.NewButtonWithIcon("Update Managed Components", theme.ViewRefreshIcon(), nil)
+	startButton := widget.NewButtonWithIcon("Start Browser", theme.MediaPlayIcon(), nil)
+	startButton.Importance = widget.HighImportance
+	startNowButton := widget.NewButtonWithIcon("Start Without Updating", theme.MediaFastForwardIcon(), nil)
 	logsButton := widget.NewButtonWithIcon("Open Logs", theme.FolderOpenIcon(), func() {
 		if err := openPath(paths.LogsDir); err != nil {
+			showErrorDialog(w, err)
+		}
+	})
+	dataDirButton := widget.NewButtonWithIcon("Open Data Folder", theme.FolderOpenIcon(), func() {
+		if err := openPath(paths.Root); err != nil {
 			showErrorDialog(w, err)
 		}
 	})
 	quitButton := widget.NewButtonWithIcon("Quit", theme.CancelIcon(), func() {
 		w.Close()
 	})
-	localhostWarning := widget.NewLabel("Advanced: enables access to localhost in the launcher-owned Tor Browser profile. Off by default because it weakens local-service isolation.")
+
+	lastSettingMessage := widget.NewLabel("No pending config changes.")
+	lastSettingMessage.Wrapping = fyne.TextWrapWord
+	lastSettingMessage.Importance = widget.MediumImportance
+	localhostWarning := widget.NewLabel("Allowing localhost access weakens Tor Browser's default local-service isolation. Leave it off unless you need loopback services in the dedicated i2tor profile.")
 	localhostWarning.Wrapping = fyne.TextWrapWord
-	localhostToggle := widget.NewCheck("Allow localhost access", nil)
+
+	autoUpdateToggle := widget.NewCheck("Check for managed updates on startup", nil)
+	autoUpdateToggle.Checked = cfg.AutoCheckUpdates
+	autoStartToggle := widget.NewCheck("Start automatically when everything is already ready", nil)
+	autoStartToggle.Checked = cfg.AutoStartOnLaunch
+	reuseTorToggle := widget.NewCheck("Reuse an existing Tor Browser install when found", nil)
+	reuseTorToggle.Checked = cfg.ReuseExistingTorBrowser
+	reuseI2PToggle := widget.NewCheck("Reuse an existing I2P install when found", nil)
+	reuseI2PToggle.Checked = cfg.ReuseExistingI2P
+	localhostToggle := widget.NewCheck("Allow localhost access in the dedicated profile", nil)
 	localhostToggle.Checked = cfg.AllowLocalhostAccess
-	localhostToggle.OnChanged = func(enabled bool) {
-		nextCfg := cfg
-		nextCfg.AllowLocalhostAccess = enabled
-		if err := config.Save(context.Background(), paths.ConfigPath, nextCfg); err != nil {
-			localhostToggle.SetChecked(cfg.AllowLocalhostAccess)
-			showErrorDialog(w, fmt.Errorf("save localhost access setting: %w", err))
-			return
-		}
-		cfg = nextCfg
-		if enabled {
-			detail.SetText("Localhost access enabled for future launches of the dedicated i2tor profile. Restart the browser session for it to take effect.")
-		} else {
-			detail.SetText("Localhost access disabled. Restart the browser session for the stricter profile settings to take effect.")
+	keepI2PRunningToggle := widget.NewCheck("Keep managed I2P running after the browser closes", nil)
+	keepI2PRunningToggle.Checked = cfg.KeepI2PRunning
+
+	saveConfigField := func(field string, update func(*config.Config), revert func()) func(bool) {
+		return func(_ bool) {
+			nextCfg := cfg
+			update(&nextCfg)
+			if err := config.Save(context.Background(), paths.ConfigPath, nextCfg); err != nil {
+				revert()
+				showErrorDialog(w, fmt.Errorf("save %s setting: %w", field, err))
+				return
+			}
+			cfg = nextCfg
+			lastSettingMessage.SetText(fmt.Sprintf("%s updated. This affects future launches.", field))
 		}
 	}
-	advancedSection := widget.NewCard(
-		"Advanced",
-		"These settings apply only to the dedicated i2tor profile.",
-		container.NewVBox(localhostToggle, localhostWarning),
-	)
 
-	actionRow := container.NewHBox(installButton, updateButton, startButton, startNowButton, logsButton, layout.NewSpacer(), quitButton)
-	content := container.NewBorder(
-		container.NewVBox(title, subtitle),
-		actionRow,
-		nil,
-		nil,
+	autoUpdateToggle.OnChanged = saveConfigField("Auto-update checks", func(next *config.Config) {
+		next.AutoCheckUpdates = autoUpdateToggle.Checked
+	}, func() { autoUpdateToggle.SetChecked(cfg.AutoCheckUpdates) })
+	autoStartToggle.OnChanged = saveConfigField("Auto-start on launch", func(next *config.Config) {
+		next.AutoStartOnLaunch = autoStartToggle.Checked
+	}, func() { autoStartToggle.SetChecked(cfg.AutoStartOnLaunch) })
+	reuseTorToggle.OnChanged = saveConfigField("Tor Browser reuse", func(next *config.Config) {
+		next.ReuseExistingTorBrowser = reuseTorToggle.Checked
+	}, func() { reuseTorToggle.SetChecked(cfg.ReuseExistingTorBrowser) })
+	reuseI2PToggle.OnChanged = saveConfigField("I2P reuse", func(next *config.Config) {
+		next.ReuseExistingI2P = reuseI2PToggle.Checked
+	}, func() { reuseI2PToggle.SetChecked(cfg.ReuseExistingI2P) })
+	localhostToggle.OnChanged = saveConfigField("Localhost access", func(next *config.Config) {
+		next.AllowLocalhostAccess = localhostToggle.Checked
+	}, func() { localhostToggle.SetChecked(cfg.AllowLocalhostAccess) })
+	keepI2PRunningToggle.OnChanged = saveConfigField("Keep I2P running", func(next *config.Config) {
+		next.KeepI2PRunning = keepI2PRunningToggle.Checked
+	}, func() { keepI2PRunningToggle.SetChecked(cfg.KeepI2PRunning) })
+
+	heroCard := widget.NewCard(
+		"",
+		"",
+		container.NewVBox(title, tagline, intro),
+	)
+	stateCard := widget.NewCard(
+		"Launch State",
+		"",
+		container.NewVBox(statusLine, primaryTitle, primaryBody, stageLine, progress),
+	)
+	dependencyCard := widget.NewCard(
+		"Dependencies",
+		"",
+		container.NewVBox(torStatus, javaStatus, i2pStatus, updateStatus),
+	)
+	actionsCard := widget.NewCard(
+		"Actions",
+		"",
 		container.NewVBox(
-			widget.NewSeparator(),
-			status,
-			stageLabel,
-			progress,
-			detail,
-			widget.NewSeparator(),
-			advancedSection,
+			installButton,
+			updateButton,
+			startButton,
+			startNowButton,
+			logsButton,
+			dataDirButton,
 		),
 	)
-	w.SetContent(container.NewPadded(content))
+	settingsCard := widget.NewCard(
+		"Settings",
+		"",
+		container.NewVBox(
+			autoUpdateToggle,
+			autoStartToggle,
+			reuseTorToggle,
+			reuseI2PToggle,
+			localhostToggle,
+			keepI2PRunningToggle,
+			localhostWarning,
+			lastSettingMessage,
+		),
+	)
 
-	setState := func(primary, secondary, stateText, stage string, progressValue float64, showInstall, showUpdate, showStart, showStartNow, busy bool) {
-		subtitle.SetText(primary)
-		detail.SetText(secondary)
-		status.SetText(stateText)
-		stageLabel.SetText(stage)
+	mainContent := container.NewVBox(
+		heroCard,
+		stateCard,
+		dependencyCard,
+		actionsCard,
+		settingsCard,
+	)
+	scroll := container.NewVScroll(mainContent)
+	scroll.SetMinSize(fyne.NewSize(760, 640))
+
+	footer := container.NewHBox(
+		layout.NewSpacer(),
+		widget.NewLabel("Settings are saved immediately."),
+		layout.NewSpacer(),
+		quitButton,
+	)
+	w.SetContent(container.NewBorder(nil, footer, nil, nil, container.NewPadded(scroll)))
+
+	setState := func(primary, secondary, badge, stage string, progressValue float64, showInstall, showUpdate, showStart, showStartNow, busy bool) {
+		statusLine.SetText("Status: " + badge)
+		primaryTitle.SetText(primary)
+		primaryBody.SetText(secondary)
+		stageLine.SetText(stage)
 		progress.SetValue(progressValue)
 		toggleButton(installButton, showInstall, busy)
 		toggleButton(updateButton, showUpdate, busy)
 		toggleButton(startButton, showStart, busy)
 		toggleButton(startNowButton, showStartNow, busy)
 		logsButton.Enable()
+		dataDirButton.Enable()
 		quitButton.Enable()
+	}
+
+	refreshDependencyStatus := func(ctx context.Context) startupAssessment {
+		torReady := managedOrExistingTorAvailable(ctx, cfg, paths)
+		javaReady := managedOrExistingJavaAvailable(ctx, paths)
+		i2pReady := managedOrExistingI2PAvailable(ctx, cfg, paths)
+		torStatus.SetText(readinessLine("Tor Browser", torReady, cfg.ReuseExistingTorBrowser))
+		javaStatus.SetText(readinessLine("Java 17+", javaReady, true))
+		i2pStatus.SetText(readinessLine("I2P", i2pReady, cfg.ReuseExistingI2P))
+
+		assessment := assessStartup(ctx, cfg, paths, *manifest)
+		if assessment.UpdateAvailable {
+			updateStatus.SetText("Updates: " + assessment.UpdateSummary)
+		} else if cfg.AutoCheckUpdates {
+			updateStatus.SetText("Updates: managed components are current")
+		} else {
+			updateStatus.SetText("Updates: startup checks disabled in settings")
+		}
+		return assessment
 	}
 
 	runInBackground := func(busyTitle, busyDetail string, fn func(context.Context) error, onSuccess func()) {
@@ -135,12 +247,12 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 
 	reassess := func(triggerAutoStart bool) {
 		go func() {
-			assessment := assessStartup(context.Background(), cfg, paths, *manifest)
+			assessment := refreshDependencyStatus(context.Background())
 			switch {
 			case assessment.NeedsInstall:
-				setState(assessment.PrimaryMessage, assessment.SecondaryMessage, "Install Needed", "Waiting for install", 0, true, false, false, false, false)
+				setState(assessment.PrimaryMessage, assessment.SecondaryMessage, "Install Needed", "Waiting for install", 0.1, true, false, false, false, false)
 			case assessment.UpdateAvailable:
-				setState(assessment.PrimaryMessage, assessment.UpdateSummary, "Update Available", "Waiting for update decision", 0, false, true, false, true, false)
+				setState(assessment.PrimaryMessage, assessment.SecondaryMessage, "Update Available", "Waiting for update decision", 0.45, false, true, false, true, false)
 			default:
 				setState(assessment.PrimaryMessage, assessment.SecondaryMessage, "Ready", "Ready to launch", 1, false, false, true, false, false)
 				if triggerAutoStart && assessment.AutoStart {
@@ -151,7 +263,7 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 	}
 
 	installButton.OnTapped = func() {
-		runInBackground("Installing dependencies", "Downloading and verifying Tor Browser, Java, and I2P if needed.", func(actionCtx context.Context) error {
+		runInBackground("Installing dependencies", "Downloading, verifying, and preparing managed runtime components.", func(actionCtx context.Context) error {
 			if err := commandInstall(actionCtx, logger, cfg, paths, manifest); err != nil {
 				return err
 			}
@@ -188,11 +300,15 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 			}
 			*manifest = runManifest
 			_ = state.SaveManifest(context.Background(), paths.ManifestPath, *manifest)
-			setState("Browser launched", "Tor Browser is open. The launcher will keep running in the background until the browser exits.", "Running", "Browser launched", 1, false, false, false, false, true)
+			runningDetail := "Tor Browser is open. The launcher will stay alive in the background until the browser exits."
+			if cfg.KeepI2PRunning {
+				runningDetail = "Tor Browser is open. Managed I2P will stay running in the background after the browser exits."
+			}
+			setState("Browser launched", runningDetail, "Running", "Browser launched", 1, false, false, false, false, true)
 			w.Hide()
 			go func() {
 				waitManifest := *manifest
-				err := waitForLauncherSession(context.Background(), logger, session, &waitManifest)
+				err := waitForLauncherSession(context.Background(), logger, cfg, session, &waitManifest)
 				if err == nil {
 					*manifest = waitManifest
 					_ = state.SaveManifest(context.Background(), paths.ManifestPath, *manifest)
@@ -219,6 +335,19 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 	w.ShowAndRun()
 	_ = ctx
 	return nil
+}
+
+func readinessLine(name string, ready, reuseAllowed bool) string {
+	switch {
+	case ready && reuseAllowed:
+		return fmt.Sprintf("%s: ready", name)
+	case ready:
+		return fmt.Sprintf("%s: ready (managed path only)", name)
+	case reuseAllowed:
+		return fmt.Sprintf("%s: missing managed install and no reusable install detected", name)
+	default:
+		return fmt.Sprintf("%s: missing managed install", name)
+	}
 }
 
 func toggleButton(btn *widget.Button, visible, disabled bool) {

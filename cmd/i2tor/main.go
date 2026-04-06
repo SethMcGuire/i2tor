@@ -2,20 +2,21 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
+	"regexp"
 	"strings"
 	"time"
 
 	"i2tor/internal/apppaths"
 	"i2tor/internal/config"
 	"i2tor/internal/detect"
-	"i2tor/internal/gui"
 	"i2tor/internal/install"
 	"i2tor/internal/logging"
 	rt "i2tor/internal/runtime"
@@ -130,11 +131,6 @@ func runCLI(ctx context.Context, args []string) int {
 			fail(os.Stderr, "launch desktop ui", err, paths.CurrentLogFile, "Review the log file for the failing step, then retry `i2tor desktop`.")
 			return 1
 		}
-	case "webui":
-		if err := commandWebUI(ctx, logger, cfg, paths, &manifest, true); err != nil {
-			fail(os.Stderr, "serve web ui", err, paths.CurrentLogFile, "Review the log file for the failing step, then retry `i2tor webui`.")
-			return 1
-		}
 	case "uninstall":
 		if err := commandUninstall(ctx, paths, manifest); err != nil {
 			fail(os.Stderr, "uninstall managed files", err, paths.CurrentLogFile, "Stop i2tor, confirm no launcher-owned I2P process is running, then retry.")
@@ -161,7 +157,7 @@ func commandRun(ctx context.Context, logger *logging.Logger, cfg config.Config, 
 	if err != nil {
 		return err
 	}
-	return waitForLauncherSession(ctx, logger, session, manifest)
+	return waitForLauncherSession(ctx, logger, cfg, session, manifest)
 }
 
 func commandInstall(ctx context.Context, logger *logging.Logger, cfg config.Config, paths apppaths.AppPaths, manifest *state.Manifest) error {
@@ -385,6 +381,7 @@ func commandDoctor(ctx context.Context, cfg config.Config, paths apppaths.AppPat
 	for label, ok := range checks {
 		fmt.Fprintf(os.Stdout, "%s: %t\n", label, ok)
 	}
+	printI2PDiagnostics(ctx, paths, manifest)
 	return nil
 }
 
@@ -400,83 +397,6 @@ func commandLogs(paths apppaths.AppPaths) {
 			fmt.Fprintln(os.Stdout, line)
 		}
 	}
-}
-
-func commandWebUI(ctx context.Context, logger *logging.Logger, cfg config.Config, paths apppaths.AppPaths, manifest *state.Manifest, autoOpen bool) error {
-	var server *gui.Server
-	refreshModel := func(lastAction, lastError string) {
-		if server != nil {
-			server.UpdateModel(buildGUIModel(cfg, paths, *manifest, lastAction, lastError))
-		}
-	}
-	actions := map[string]func(context.Context) (string, error){
-		"install": func(actionCtx context.Context) (string, error) {
-			if err := commandInstall(actionCtx, logger, cfg, paths, manifest); err != nil {
-				refreshModel("", err.Error())
-				return "", err
-			}
-			if err := state.SaveManifest(actionCtx, paths.ManifestPath, *manifest); err != nil {
-				refreshModel("", err.Error())
-				return "", err
-			}
-			refreshModel("install completed", "")
-			return "install completed", nil
-		},
-		"update": func(actionCtx context.Context) (string, error) {
-			if err := commandUpdate(actionCtx, logger, cfg, paths, manifest); err != nil {
-				refreshModel("", err.Error())
-				return "", err
-			}
-			if err := state.SaveManifest(actionCtx, paths.ManifestPath, *manifest); err != nil {
-				refreshModel("", err.Error())
-				return "", err
-			}
-			refreshModel("update completed", "")
-			return "update completed", nil
-		},
-		"doctor": func(actionCtx context.Context) (string, error) {
-			if err := commandDoctor(actionCtx, cfg, paths, *manifest); err != nil {
-				refreshModel("", err.Error())
-				return "", err
-			}
-			refreshModel("doctor completed; see terminal for details", "")
-			return "doctor completed; see terminal for details", nil
-		},
-		"run": func(actionCtx context.Context) (string, error) {
-			go func() {
-				runManifest := *manifest
-				runCtx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-				if err := commandRun(runCtx, logger, cfg, paths, &runManifest); err == nil {
-					*manifest = runManifest
-					_ = state.SaveManifest(context.Background(), paths.ManifestPath, *manifest)
-					refreshModel("launcher started and exited cleanly", "")
-				} else {
-					refreshModel("", err.Error())
-				}
-			}()
-			refreshModel("launcher started; watch the terminal and logs for progress", "")
-			return "launcher started; watch the terminal and logs for progress", nil
-		},
-	}
-	var err error
-	server, err = gui.New(buildGUIModel(cfg, paths, *manifest, "", ""), actions)
-	if err != nil {
-		return fmt.Errorf("initialize gui server: %w", err)
-	}
-	url, err := server.Serve(ctx, "127.0.0.1:0")
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(os.Stdout, "i2tor gui available at %s\n", url)
-	if autoOpen {
-		if err := openBrowser(url); err != nil {
-			logger.Warn("main", "failed to open browser for desktop ui", map[string]any{"error": err.Error(), "url": url})
-			fmt.Fprintf(os.Stdout, "open this URL manually: %s\n", url)
-		}
-	}
-	<-ctx.Done()
-	return nil
 }
 
 func commandUninstall(ctx context.Context, paths apppaths.AppPaths, manifest state.Manifest) error {
@@ -517,6 +437,174 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+func printI2PDiagnostics(ctx context.Context, paths apppaths.AppPaths, manifest state.Manifest) {
+	fmt.Fprintln(os.Stdout, "I2P diagnostics:")
+
+	if report, err := fetchI2PConsoleReport(ctx, "http://127.0.0.1:7657/"); err == nil {
+		fmt.Fprintf(os.Stdout, "  Router console reachable: true\n")
+		if report.Title != "" {
+			fmt.Fprintf(os.Stdout, "  Console title: %s\n", report.Title)
+		}
+		if len(report.Indicators) > 0 {
+			fmt.Fprintf(os.Stdout, "  Console indicators: %s\n", strings.Join(report.Indicators, ", "))
+		}
+		for _, warning := range report.Warnings {
+			fmt.Fprintf(os.Stdout, "  Warning: %s\n", warning)
+		}
+	} else {
+		fmt.Fprintf(os.Stdout, "  Router console reachable: false (%v)\n", err)
+	}
+
+	if manifest.LauncherManagedI2P.PID > 0 {
+		fmt.Fprintf(os.Stdout, "  Manifest managed I2P PID: %d (owned=%t)\n", manifest.LauncherManagedI2P.PID, manifest.LauncherManagedI2P.Owns)
+	}
+
+	netdbCount := countFiles(filepath.Join(paths.I2PRuntimeDir, "netDb"))
+	peerCount := countFiles(filepath.Join(paths.I2PRuntimeDir, "peerProfiles"))
+	fmt.Fprintf(os.Stdout, "  netDb file count: %d\n", netdbCount)
+	fmt.Fprintf(os.Stdout, "  peerProfiles file count: %d\n", peerCount)
+	if udpPort, err := i2pUDPPort(filepath.Join(paths.I2PRuntimeDir, "router.config")); err == nil && udpPort != "" {
+		fmt.Fprintf(os.Stdout, "  Configured I2P UDP port: %s\n", udpPort)
+	}
+
+	if lines, err := tailLines(filepath.Join(paths.I2PRuntimeDir, "eventlog.txt"), 5); err == nil && len(lines) > 0 {
+		fmt.Fprintln(os.Stdout, "  Recent eventlog entries:")
+		for _, line := range lines {
+			fmt.Fprintf(os.Stdout, "    %s\n", line)
+		}
+	}
+	if lines, err := tailLines(filepath.Join(paths.I2PRuntimeDir, "wrapper.log"), 8); err == nil && len(lines) > 0 {
+		fmt.Fprintln(os.Stdout, "  Recent wrapper log lines:")
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			fmt.Fprintf(os.Stdout, "    %s\n", line)
+		}
+	}
+}
+
+type i2pConsoleReport struct {
+	Title      string
+	Indicators []string
+	Warnings   []string
+}
+
+func fetchI2PConsoleReport(ctx context.Context, url string) (i2pConsoleReport, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return i2pConsoleReport{}, err
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return i2pConsoleReport{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return i2pConsoleReport{}, fmt.Errorf("unexpected status %s", resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return i2pConsoleReport{}, err
+	}
+	return summarizeI2PConsoleHTML(string(body)), nil
+}
+
+var titlePattern = regexp.MustCompile(`(?is)<title>(.*?)</title>`)
+
+func summarizeI2PConsoleHTML(html string) i2pConsoleReport {
+	report := i2pConsoleReport{}
+	if match := titlePattern.FindStringSubmatch(html); len(match) == 2 {
+		report.Title = strings.TrimSpace(stripHTML(match[1]))
+	}
+	lower := strings.ToLower(html)
+	indicators := []struct {
+		needle string
+		label  string
+	}{
+		{"clock skew", "clock-skew warning visible"},
+		{"firewalled", "firewalled status mentioned"},
+		{"ntcp2", "NTCP2 mentioned"},
+		{"ssu2", "SSU2 mentioned"},
+		{"hidden mode", "hidden mode mentioned"},
+		{"floodfill", "floodfill mentioned"},
+		{"reseed", "reseed mentioned"},
+		{"rejecting tunnels", "rejecting tunnels mentioned"},
+		{"network database", "network database section present"},
+		{"peer", "peer information present"},
+	}
+	for _, indicator := range indicators {
+		if strings.Contains(lower, indicator.needle) {
+			report.Indicators = append(report.Indicators, indicator.label)
+		}
+	}
+	if strings.Contains(lower, "firewalled") {
+		report.Warnings = append(report.Warnings, "Router console reports firewalled reachability. I2P eepsite access may be unreliable until UDP reachability improves.")
+	}
+	if strings.Contains(lower, "clock skew") {
+		report.Warnings = append(report.Warnings, "Router console reports clock skew. Incorrect system time can break I2P routing.")
+	}
+	return report
+}
+
+func stripHTML(s string) string {
+	inTag := false
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '<':
+			inTag = true
+		case '>':
+			inTag = false
+		default:
+			if !inTag {
+				b.WriteRune(r)
+			}
+		}
+	}
+	return b.String()
+}
+
+func countFiles(root string) int {
+	count := 0
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() {
+			count++
+		}
+		return nil
+	})
+	return count
+}
+
+func tailLines(path string, n int) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) <= n {
+		return lines, nil
+	}
+	return lines[len(lines)-n:], nil
+}
+
+func i2pUDPPort(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "i2np.udp.port=") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "i2np.udp.port=")), nil
+		}
+	}
+	return "", nil
+}
+
 func installRecordFromApp(app install.InstalledApp) state.InstallRecord {
 	now := time.Now().UTC()
 	return state.InstallRecord{
@@ -531,44 +619,6 @@ func installRecordFromApp(app install.InstalledApp) state.InstallRecord {
 		SignatureVerifiedAt: now,
 		InstalledAt:         now,
 	}
-}
-
-func buildGUIModel(cfg config.Config, paths apppaths.AppPaths, manifest state.Manifest, lastAction, lastError string) gui.ViewModel {
-	fields := map[string]string{
-		"Config":         paths.ConfigPath,
-		"Manifest":       paths.ManifestPath,
-		"Tor Browser":    manifest.TorBrowser.Version + " (" + blankDefault(manifest.TorBrowser.Source, "unknown") + ")",
-		"I2P":            manifest.I2P.Version + " (" + blankDefault(manifest.I2P.Source, "unknown") + ")",
-		"Java":           manifest.Java.Version + " (" + blankDefault(manifest.Java.Source, "unknown") + ")",
-		"I2P Proxy 4444": fmt.Sprintf("%t", portReady("127.0.0.1:4444")),
-		"Tor SOCKS 9150": fmt.Sprintf("%t", portReady("127.0.0.1:9150")),
-		"Reuse Tor":      fmt.Sprintf("%t", cfg.ReuseExistingTorBrowser),
-		"Reuse I2P":      fmt.Sprintf("%t", cfg.ReuseExistingI2P),
-		"Logs":           paths.LogsDir,
-	}
-	ordered := map[string]string{}
-	keys := make([]string, 0, len(fields))
-	for key := range fields {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		ordered[key] = fields[key]
-	}
-	return gui.ViewModel{
-		Title:      "i2tor",
-		Subtitle:   "Launcher status, install flow, and diagnostics for the dedicated Tor + I2P profile.",
-		LastAction: lastAction,
-		LastError:  lastError,
-		Fields:     ordered,
-	}
-}
-
-func blankDefault(value, fallback string) string {
-	if value == "" {
-		return fallback
-	}
-	return value
 }
 
 func openBrowser(url string) error {
@@ -593,4 +643,3 @@ func openPath(target string) error {
 	return nil
 }
 
-var _ = errors.Is

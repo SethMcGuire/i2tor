@@ -2,7 +2,9 @@
   "reuse_existing_tor_browser": true,
   "reuse_existing_i2p": true,
   "auto_check_updates": true,
+  "auto_start_on_launch": false,
   "allow_localhost_access": false,
+  "keep_i2p_running": false,
   "data_dir": "",
   "log_level": "info"
 }

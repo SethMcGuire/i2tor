@@ -248,6 +248,13 @@ func writeInstallerProperties(templatePath, destPath, installDir string) error {
 }
 
 func NormalizeManagedI2PPortableConfig(installDir string, java InstalledApp) error {
+	if _, err := os.Stat(filepath.Join(installDir, "wrapper.config")); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("stat wrapper config in %q: %w", installDir, err)
+	}
+
 	javaPath, err := java.ResolveExecutable()
 	if err != nil {
 		return fmt.Errorf("resolve Java runtime for portable I2P config: %w", err)
@@ -262,18 +269,18 @@ func NormalizeManagedI2PPortableConfig(installDir string, java InstalledApp) err
 	wrapperLines = replaceInstallPathReferences(wrapperLines, installDir)
 	wrapperLines = setConfigLine(wrapperLines, "set.JAVA_HOME=", "set.JAVA_HOME="+javaHome)
 	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.command=", "wrapper.java.command="+javaPath)
-	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.classpath.1=", filepath.Join(installDir, "lib", "*.jar"))
-	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.library.path.1=", installDir)
-	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.library.path.2=", filepath.Join(installDir, "lib"))
-	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.2=", fmt.Sprintf("wrapper.java.additional.2=-Di2p.dir.base=%q", installDir))
-	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.2.stripquotes=", "wrapper.java.additional.2.stripquotes=TRUE")
-	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.3=", fmt.Sprintf("wrapper.java.additional.3=-Di2p.dir.pid=%q", installDir))
-	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.3.stripquotes=", "wrapper.java.additional.3.stripquotes=TRUE")
-	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.4=", fmt.Sprintf("wrapper.java.additional.4=-Di2p.dir.temp=%q", installDir))
-	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.4.stripquotes=", "wrapper.java.additional.4.stripquotes=TRUE")
-	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.5=", fmt.Sprintf("wrapper.java.additional.5=-Di2p.dir.config=%q", installDir))
-	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.java.additional.5.stripquotes=", "wrapper.java.additional.5.stripquotes=TRUE")
-	wrapperLines = uncommentAndSet(wrapperLines, "wrapper.logfile=", "wrapper.logfile="+filepath.Join(installDir, "wrapper.log"))
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.classpath.1=", "wrapper.java.classpath.1="+filepath.Join(installDir, "lib", "*.jar"))
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.library.path.1=", "wrapper.java.library.path.1="+installDir)
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.library.path.2=", "wrapper.java.library.path.2="+filepath.Join(installDir, "lib"))
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.additional.2=", fmt.Sprintf("wrapper.java.additional.2=-Di2p.dir.base=%q", installDir))
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.additional.2.stripquotes=", "wrapper.java.additional.2.stripquotes=TRUE")
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.additional.3=", fmt.Sprintf("wrapper.java.additional.3=-Di2p.dir.pid=%q", installDir))
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.additional.3.stripquotes=", "wrapper.java.additional.3.stripquotes=TRUE")
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.additional.4=", fmt.Sprintf("wrapper.java.additional.4=-Di2p.dir.temp=%q", installDir))
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.additional.4.stripquotes=", "wrapper.java.additional.4.stripquotes=TRUE")
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.additional.5=", fmt.Sprintf("wrapper.java.additional.5=-Di2p.dir.config=%q", installDir))
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.additional.5.stripquotes=", "wrapper.java.additional.5.stripquotes=TRUE")
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.logfile=", "wrapper.logfile="+filepath.Join(installDir, "wrapper.log"))
 	if err := os.WriteFile(wrapperPath, []byte(strings.Join(wrapperLines, "\n")+"\n"), 0o644); err != nil {
 		return fmt.Errorf("write wrapper config %q: %w", wrapperPath, err)
 	}
@@ -284,11 +291,11 @@ func NormalizeManagedI2PPortableConfig(installDir string, java InstalledApp) err
 		return fmt.Errorf("read i2prouter script %q: %w", routerPath, err)
 	}
 	routerLines = replaceInstallPathReferences(routerLines, installDir)
-	routerLines = setConfigLine(routerLines, "I2P=", fmt.Sprintf("I2P=%q", installDir))
-	routerLines = setConfigLine(routerLines, "I2P_CONFIG_DIR=", fmt.Sprintf("I2P_CONFIG_DIR=%q", installDir))
-	routerLines = uncommentAndSet(routerLines, "I2PTEMP=", fmt.Sprintf("I2PTEMP=%q", installDir))
-	routerLines = uncommentAndSet(routerLines, "PIDDIR=", fmt.Sprintf("PIDDIR=%q", installDir))
-	routerLines = uncommentAndSet(routerLines, "LOGDIR=", fmt.Sprintf("LOGDIR=%q", installDir))
+	routerLines = replaceAllConfigLines(routerLines, "I2P=", fmt.Sprintf("I2P=%q", installDir))
+	routerLines = replaceAllConfigLines(routerLines, "I2P_CONFIG_DIR=", fmt.Sprintf("I2P_CONFIG_DIR=%q", installDir))
+	routerLines = replaceAllConfigLines(routerLines, "I2PTEMP=", fmt.Sprintf("I2PTEMP=%q", installDir))
+	routerLines = replaceAllConfigLines(routerLines, "PIDDIR=", fmt.Sprintf("PIDDIR=%q", installDir))
+	routerLines = replaceAllConfigLines(routerLines, "LOGDIR=", fmt.Sprintf("LOGDIR=%q", installDir))
 	if err := os.WriteFile(routerPath, []byte(strings.Join(routerLines, "\n")+"\n"), 0o755); err != nil {
 		return fmt.Errorf("write i2prouter script %q: %w", routerPath, err)
 	}
@@ -336,8 +343,19 @@ func setConfigLine(lines []string, prefix, value string) []string {
 	return append(lines, value)
 }
 
-func uncommentAndSet(lines []string, prefix, value string) []string {
-	return setConfigLine(lines, prefix, value)
+func replaceAllConfigLines(lines []string, prefix, value string) []string {
+	replaced := false
+	for i, line := range lines {
+		trimmed := strings.TrimPrefix(strings.TrimSpace(line), "#")
+		if strings.HasPrefix(trimmed, prefix) {
+			lines[i] = value
+			replaced = true
+		}
+	}
+	if !replaced {
+		return append(lines, value)
+	}
+	return lines
 }
 
 func replaceInstallPathReferences(lines []string, installDir string) []string {
@@ -353,16 +371,22 @@ func rewriteInstallPathReference(line, installDir string) string {
 		if idx == -1 {
 			continue
 		}
-		start := strings.LastIndex(line[:idx], "/home/")
-		if start == -1 {
-			start = strings.LastIndex(line[:idx], "\"/home/")
-			if start == -1 {
-				start = strings.LastIndex(line[:idx], "='/home/")
+		// Scan backwards from the marker to find the start of the path,
+		// stopping at any character that can't appear in an unquoted path
+		// context: quotes, equals, space, or tab.
+		start := idx
+		for start > 0 {
+			ch := line[start-1]
+			if ch == '"' || ch == '\'' || ch == '=' || ch == ' ' || ch == '\t' {
+				break
 			}
+			start--
 		}
-		if start == -1 {
+		// The segment must be an absolute path.
+		if start >= idx || line[start] != '/' {
 			continue
 		}
+		// Scan forward past the marker to find the end of the path.
 		end := idx + len(marker)
 		for end < len(line) {
 			ch := line[end]

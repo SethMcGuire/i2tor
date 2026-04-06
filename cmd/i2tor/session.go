@@ -27,6 +27,7 @@ type launcherSession struct {
 	Browser rt.ManagedProcess
 	Tor     rt.ManagedProcess
 	I2P     rt.ManagedProcess
+	ReuseI2P bool
 }
 
 func startLauncherSession(ctx context.Context, logger *logging.Logger, cfg config.Config, paths apppaths.AppPaths, manifest *state.Manifest, report progressReporter) (launcherSession, error) {
@@ -42,17 +43,33 @@ func startLauncherSession(ctx context.Context, logger *logging.Logger, cfg confi
 		return launcherSession{}, err
 	}
 
-	step("Starting I2P", "Launching the managed I2P router.", 0.25)
-	i2pProc, err := rt.StartI2P(ctx, logger, i2pInstall, javaInstall, paths)
-	if err != nil {
-		return launcherSession{}, fmt.Errorf("failed to start I2P from %s: %w", i2pInstall.InstallDir, err)
-	}
-	manifest.LauncherManagedI2P = state.ManagedProcessRecord{
-		PID:       i2pProc.PID,
-		StartedAt: i2pProc.StartedAt,
-		Command:   i2pProc.Command,
-		Args:      i2pProc.Args,
-		Owns:      true,
+	reusedI2P := false
+	var i2pProc rt.ManagedProcess
+	if cfg.KeepI2PRunning && manifest.LauncherManagedI2P.Owns && manifest.LauncherManagedI2P.PID > 0 {
+		step("Reusing I2P", "Using the existing launcher-managed I2P router from a previous session.", 0.25)
+		i2pProc = rt.ManagedProcess{
+			Name:      "i2p",
+			Command:   manifest.LauncherManagedI2P.Command,
+			Args:      manifest.LauncherManagedI2P.Args,
+			PID:       manifest.LauncherManagedI2P.PID,
+			StartedAt: manifest.LauncherManagedI2P.StartedAt,
+			Owned:     false,
+		}
+		reusedI2P = true
+	} else {
+		step("Starting I2P", "Launching the managed I2P router.", 0.25)
+		var err error
+		i2pProc, err = rt.StartI2P(ctx, logger, i2pInstall, javaInstall, paths)
+		if err != nil {
+			return launcherSession{}, fmt.Errorf("failed to start I2P from %s: %w", i2pInstall.InstallDir, err)
+		}
+		manifest.LauncherManagedI2P = state.ManagedProcessRecord{
+			PID:       i2pProc.PID,
+			StartedAt: i2pProc.StartedAt,
+			Command:   i2pProc.Command,
+			Args:      i2pProc.Args,
+			Owns:      true,
+		}
 	}
 
 	step("Waiting for I2P", "Checking the local I2P HTTP proxy on 127.0.0.1:4444. First startup can take a while.", 0.4)
@@ -107,10 +124,10 @@ func startLauncherSession(ctx context.Context, logger *logging.Logger, cfg confi
 
 	manifest.GeneratedPACPath = paths.PACFile
 	manifest.DedicatedProfilePath = paths.ProfileDir
-	return launcherSession{Browser: browserProc, Tor: torProc, I2P: i2pProc}, nil
+	return launcherSession{Browser: browserProc, Tor: torProc, I2P: i2pProc, ReuseI2P: reusedI2P}, nil
 }
 
-func waitForLauncherSession(ctx context.Context, logger *logging.Logger, session launcherSession, manifest *state.Manifest) error {
+func waitForLauncherSession(ctx context.Context, logger *logging.Logger, cfg config.Config, session launcherSession, manifest *state.Manifest) error {
 	err := rt.Wait(ctx, session.Browser)
 	if err != nil {
 		logger.Warn("torbrowser", "browser exited with error", map[string]any{"error": err.Error()})
@@ -120,11 +137,17 @@ func waitForLauncherSession(ctx context.Context, logger *logging.Logger, session
 		_ = rt.ShutdownManagedI2P(context.Background(), session.I2P)
 		return fmt.Errorf("shutdown managed Tor pid %d: %w", session.Tor.PID, shutdownErr)
 	}
-	if shutdownErr := rt.ShutdownManagedI2P(context.Background(), session.I2P); shutdownErr != nil {
-		return fmt.Errorf("shutdown managed I2P pid %d: %w", session.I2P.PID, shutdownErr)
+	if !cfg.KeepI2PRunning && !session.ReuseI2P {
+		if shutdownErr := rt.ShutdownManagedI2P(context.Background(), session.I2P); shutdownErr != nil {
+			return fmt.Errorf("shutdown managed I2P pid %d: %w", session.I2P.PID, shutdownErr)
+		}
+	} else if cfg.KeepI2PRunning {
+		logger.Info("i2p", "leaving managed I2P running in background", map[string]any{"pid": session.I2P.PID})
 	}
 
-	manifest.LauncherManagedI2P = state.ManagedProcessRecord{}
+	if !cfg.KeepI2PRunning && !session.ReuseI2P {
+		manifest.LauncherManagedI2P = state.ManagedProcessRecord{}
+	}
 	manifest.LastSuccessfulLaunchAt = time.Now().UTC()
 	return nil
 }

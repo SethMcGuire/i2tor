@@ -18,5 +18,5 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 	_ = cfg
 	_ = paths
 	_ = manifest
-	return fmt.Errorf("native desktop GUI is currently implemented for Linux only; use `i2tor webui` on this platform")
+	return fmt.Errorf("native desktop GUI is currently implemented for Linux only")
 }

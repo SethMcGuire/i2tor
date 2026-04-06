@@ -6,9 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
-	"time"
-
 	"i2tor/internal/apppaths"
 	"i2tor/internal/detect"
 	"i2tor/internal/downloader"
@@ -252,10 +249,3 @@ func extractedRoot(tempDir string) (string, error) {
 	return tempDir, nil
 }
 
-func installTimestamp() time.Time {
-	return time.Now().UTC()
-}
-
-func trimVersionPrefix(v string) string {
-	return strings.TrimPrefix(v, "v")
-}

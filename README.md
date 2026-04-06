@@ -101,7 +101,9 @@ Default config shape:
   "reuse_existing_tor_browser": true,
   "reuse_existing_i2p": true,
   "auto_check_updates": true,
+  "auto_start_on_launch": false,
   "allow_localhost_access": false,
+  "keep_i2p_running": false,
   "data_dir": "",
   "log_level": "info"
 }
@@ -110,6 +112,10 @@ Default config shape:
 Sample files are in [testdata/config.sample.json](/home/seth/Documents/i2tor/testdata/config.sample.json) and [testdata/manifest.sample.json](/home/seth/Documents/i2tor/testdata/manifest.sample.json).
 
 `allow_localhost_access` is an advanced, off-by-default opt-in. When enabled, `i2tor` writes localhost-related proxy prefs into its dedicated Tor Browser profile so the launcher-owned browser can reach loopback services. This weakens the default local-service isolation posture and should only be enabled deliberately.
+
+`keep_i2p_running` is an optional background mode for the managed I2P router. When enabled, `i2tor` leaves its managed I2P process running after Tor Browser exits so future launches do not have to start from a completely cold I2P session.
+
+`auto_start_on_launch` is off by default. When enabled, the native GUI will automatically start the browser on launches where everything is already ready and no install/update decision is needed.
 
 ## Updates and GUI
 

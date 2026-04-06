@@ -187,11 +187,11 @@ func startPageContent(logoSrc, profileName string) string {
     code { background:var(--code); padding:3px 7px; border-radius:8px; color:#d9ecff; }
     ul { margin:0; padding-left:20px; }
     .pill { display:inline-block; padding:7px 12px; border-radius:999px; background:rgba(114,241,184,.12); border:1px solid rgba(114,241,184,.24); color:var(--accent); font-weight:700; margin-bottom:16px; }
-    .hero { display:grid; grid-template-columns: 110px minmax(0, 1fr); gap:24px; align-items:center; margin-bottom:28px; }
-    .logo-frame { width:110px; height:110px; border-radius:30px; display:grid; place-items:center; background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.08); box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 16px 32px rgba(0,0,0,.28); }
-    .logo { width:84px; height:84px; object-fit:contain; }
+    .hero { display:grid; grid-template-columns: 136px minmax(0, 1fr); gap:24px; align-items:center; margin-bottom:28px; }
+    .logo-frame { width:136px; height:136px; padding:12px; border-radius:34px; display:grid; place-items:center; background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.10); box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 16px 32px rgba(0,0,0,.28); overflow:hidden; }
+    .logo { width:100%%; height:100%%; object-fit:cover; border-radius:26px; display:block; }
     .lede { max-width: 58ch; margin:0; }
-    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-top:24px; }
+    .grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:16px; margin-top:24px; align-items:stretch; }
     .card { background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015)); border:1px solid var(--line); border-radius:18px; padding:20px; }
     .eyebrow { display:block; margin-bottom:8px; color:var(--accent-2); font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
     .wallets { display:grid; gap:12px; margin-top:14px; }
@@ -202,6 +202,8 @@ func startPageContent(logoSrc, profileName string) string {
       main { padding: 24px 16px 40px; }
       section { padding:24px; }
       .hero { grid-template-columns: 1fr; }
+      .logo-frame { width:120px; height:120px; }
+      .grid { grid-template-columns: 1fr; }
       h1 { font-size:34px; }
     }
   </style>
@@ -231,6 +233,7 @@ func startPageContent(logoSrc, profileName string) string {
       <div class="card">
         <span class="eyebrow">Getting Started</span>
         <h2>Useful directories</h2>
+        <p>Fresh I2P sessions can take a few minutes before eepsites become consistently reachable. If some <code>.i2p</code> sites fail at first, leave the router running and try again.</p>
         <ul>
           <li><a href="http://tortaxi2dev6xjwbaydqzla77rrnth7yn2oqzjfmiuwn5h6vsk2a4syd.onion/">tor.taxi</a> for Tor service directories and current links.</li>
           <li><a href="http://notbob.i2p">notbob.i2p</a> for I2P service directories and starter links.</li>

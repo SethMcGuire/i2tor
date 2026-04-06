@@ -32,7 +32,7 @@ func TestAssessStartupNeedsInstallWhenNothingAvailable(t *testing.T) {
 	}
 }
 
-func TestAssessStartupAutoStartsWhenManagedInstallsExist(t *testing.T) {
+func TestAssessStartupReadyButManualByDefaultWhenManagedInstallsExist(t *testing.T) {
 	t.Parallel()
 
 	paths, err := apppaths.Resolve(context.Background(), t.TempDir())
@@ -41,6 +41,30 @@ func TestAssessStartupAutoStartsWhenManagedInstallsExist(t *testing.T) {
 	}
 	cfg := config.Default()
 	cfg.AutoCheckUpdates = false
+
+	writeTestFile(t, filepath.Join(paths.JavaRuntimeDir, "bin", "java"), 0o755)
+	writeTestFile(t, filepath.Join(paths.I2PRuntimeDir, "i2prouter"), 0o755)
+	writeTestFile(t, filepath.Join(paths.TorBrowserRuntimeDir, "Browser", "firefox"), 0o755)
+
+	got := assessStartup(context.Background(), cfg, paths, state.DefaultManifest())
+	if got.AutoStart {
+		t.Fatalf("AutoStart = true, want false")
+	}
+	if got.NeedsInstall {
+		t.Fatalf("NeedsInstall = true, want false")
+	}
+}
+
+func TestAssessStartupAutoStartsWhenConfigured(t *testing.T) {
+	t.Parallel()
+
+	paths, err := apppaths.Resolve(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	cfg := config.Default()
+	cfg.AutoCheckUpdates = false
+	cfg.AutoStartOnLaunch = true
 
 	writeTestFile(t, filepath.Join(paths.JavaRuntimeDir, "bin", "java"), 0o755)
 	writeTestFile(t, filepath.Join(paths.I2PRuntimeDir, "i2prouter"), 0o755)
