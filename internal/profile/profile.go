@@ -19,9 +19,9 @@ type Options struct {
 const fallbackStartPageLogoDataURI = "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%230d1321'/%3E%3Cstop offset='1' stop-color='%231f6f78'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='56' fill='url(%23g)'/%3E%3Ccircle cx='128' cy='128' r='78' fill='none' stroke='%23d7fff1' stroke-width='18'/%3E%3Cpath d='M128 50v32M128 174v32M50 128h32M174 128h32' stroke='%23d7fff1' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='128' cy='128' r='22' fill='%23ffd166'/%3E%3C/svg%3E"
 
 const (
-	donationAddressXMR = "YOUR_XMR_ADDRESS_HERE"
-	donationAddressBTC = "YOUR_BTC_ADDRESS_HERE"
-	donationAddressETH = "YOUR_ETH_ADDRESS_HERE"
+	donationAddressXMR = "43d6rjLpwHSDo4WL3mU8SPbD8MKsFw2mbcRw9foQMyk7BVWWLLpkwHjND1qDVsYfvbGzXExwC9wbZ8Kjx98PPaWf5496rd9"
+	donationAddressBTC = "bc1q36hal5nuf7x004dqm9uskdp8dyfympv45387s9"
+	donationAddressETH = "0x57c5582967425cB7B01404C5E940114a61713f53"
 )
 
 func prefsContent(pacFileURI string, opts Options) (string, error) {
