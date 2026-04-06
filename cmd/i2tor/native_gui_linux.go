@@ -16,11 +16,18 @@ import (
 
 	"i2tor/internal/apppaths"
 	"i2tor/internal/config"
+	"i2tor/internal/integration"
 	"i2tor/internal/logging"
 	"i2tor/internal/state"
 )
 
 func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Config, paths apppaths.AppPaths, manifest *state.Manifest) error {
+	if executablePath, err := integration.ResolveDesktopExecutablePath(); err == nil {
+		if err := integration.EnsureDesktopEntry(ctx, executablePath, "i2tor.png"); err != nil {
+			logger.Warn("main", "failed to install per-user desktop entry", map[string]any{"error": err.Error()})
+		}
+	}
+
 	a := app.NewWithID("org.i2tor.launcher")
 	w := a.NewWindow("i2tor")
 	w.Resize(fyne.NewSize(760, 520))
