@@ -10,6 +10,37 @@ permissions:
   contents: write
 
 jobs:
+  binary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install Linux GUI build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libxcursor-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            libxxf86vm-dev \
+            libx11-dev \
+            xorg-dev \
+            pkg-config
+      - name: Build binary
+        run: |
+          mkdir -p dist
+          go build -o dist/i2tor ./cmd/i2tor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: i2tor-binary
+          path: dist/i2tor
+
   appimage:
     runs-on: ubuntu-latest
     steps:
@@ -36,6 +67,23 @@ jobs:
         run: |
           chmod +x packaging/linux/build-appimage.sh
           VERSION="${GITHUB_REF_NAME#v}" OUTPUT_NAME="i2tor-${GITHUB_REF_NAME#v}-linux-x86_64.AppImage" packaging/linux/build-appimage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: i2tor-appimage
+          path: dist/*.AppImage
+
+  sign:
+    runs-on: ubuntu-latest
+    needs:
+      - binary
+      - appimage
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Rename binary with version suffix
+        run: mv dist/i2tor "dist/i2tor-${GITHUB_REF_NAME#v}-linux-x86_64"
       - name: Generate release checksums
         run: |
           cd dist
@@ -45,24 +93,24 @@ jobs:
           RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
         run: |
           if [ -z "${RELEASE_GPG_PRIVATE_KEY}" ]; then
-            echo "RELEASE_GPG_PRIVATE_KEY is not configured; skipping AppImage signing."
+            echo "RELEASE_GPG_PRIVATE_KEY is not configured; skipping signing."
             exit 0
           fi
           export GNUPGHOME="$(mktemp -d)"
           echo "$RELEASE_GPG_PRIVATE_KEY" | gpg --batch --import
           gpg --batch --list-secret-keys
           echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
-      - name: Sign AppImage and checksums
+      - name: Sign artifacts and checksums
         env:
           RELEASE_GPG_KEY_ID: ${{ secrets.RELEASE_GPG_KEY_ID }}
           RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
         run: |
           if [ -z "${GNUPGHOME:-}" ] || [ -z "${RELEASE_GPG_KEY_ID}" ]; then
-            echo "Release signing is not configured for this run; skipping AppImage signing."
+            echo "Release signing is not configured for this run; skipping signing."
             exit 0
           fi
           cd dist
-          for artifact in *.AppImage SHA256SUMS; do
+          for artifact in *linux-x86_64 *.AppImage SHA256SUMS; do
             if [ -n "${RELEASE_GPG_PASSPHRASE}" ]; then
               gpg --batch --yes --pinentry-mode loopback --passphrase "$RELEASE_GPG_PASSPHRASE" --local-user "$RELEASE_GPG_KEY_ID" --armor --detach-sign "$artifact"
             else
@@ -71,17 +119,13 @@ jobs:
           done
       - uses: actions/upload-artifact@v4
         with:
-          name: i2tor-appimage
-          path: |
-            dist/*.AppImage
-            dist/*.AppImage.asc
-            dist/SHA256SUMS
-            dist/SHA256SUMS.asc
+          name: i2tor-release
+          path: dist/*
 
   publish:
     runs-on: ubuntu-latest
     needs:
-      - appimage
+      - sign
     steps:
       - uses: actions/download-artifact@v4
         with:
