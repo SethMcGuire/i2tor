@@ -12,6 +12,31 @@ The launcher approach keeps browser maintenance and security updates aligned wit
 
 Linux is the primary implementation target in this repository. Windows and macOS code paths are isolated behind the same interfaces, but managed install behavior for those platforms is intentionally conservative and may require follow-up validation before production use.
 
+## Install
+
+### Arch Linux (AUR)
+
+```bash
+yay -S i2tor-bin
+```
+
+Or manually:
+
+```bash
+git clone https://aur.archlinux.org/i2tor-bin.git
+cd i2tor-bin
+makepkg -si
+```
+
+### Other Linux (AppImage)
+
+Download the latest AppImage from the [releases page](https://github.com/SethMcGuire/i2tor/releases), make it executable, and run it:
+
+```bash
+chmod +x i2tor-*.AppImage
+./i2tor-*.AppImage
+```
+
 ## Build
 
 ```bash
@@ -36,7 +61,6 @@ env GOCACHE=/tmp/i2tor-gocache go build ./cmd/i2tor
 ./i2tor logs
 ./i2tor gui
 ./i2tor desktop
-./i2tor webui
 ./i2tor uninstall
 ```
 
@@ -125,8 +149,6 @@ Sample files are in [testdata/config.sample.json](/home/seth/Documents/i2tor/tes
 
 `i2tor desktop` is an alias for the same native desktop app path.
 
-`i2tor webui` keeps the older browser-based control surface available as a fallback.
-
 ## AppImage
 
 For the Linux-first product path, this repository now targets AppImage as the primary desktop package. The AppImage bundles:
@@ -195,8 +217,8 @@ Linux:
 - The AppImage desktop entry launches the native `i2tor` GUI.
 - The packaged launcher still installs and manages runtime dependencies in the per-user data directory.
 - Release assets use a stable Linux AppImage name: `i2tor-<version>-linux-x86_64.AppImage`.
-- Release signing can publish detached armored signatures for the AppImage and `SHA256SUMS`.
-- A future `i2tor-bin` AUR package should consume that AppImage release artifact.
+- Release signing publishes detached armored signatures for the AppImage and `SHA256SUMS`.
+- The `i2tor-bin` AUR package installs the AppImage release artifact.
 
 Windows:
 - Package as a per-user install under `%LocalAppData%\\i2tor\\`.
