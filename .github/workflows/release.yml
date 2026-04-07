@@ -43,10 +43,9 @@ jobs:
       - name: Import release signing key
         env:
           RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
-          RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
         run: |
-          if [ -z "${RELEASE_GPG_PRIVATE_KEY}" ] || [ -z "${RELEASE_GPG_PASSPHRASE}" ]; then
-            echo "Release signing secrets are not configured; skipping AppImage signing."
+          if [ -z "${RELEASE_GPG_PRIVATE_KEY}" ]; then
+            echo "RELEASE_GPG_PRIVATE_KEY is not configured; skipping AppImage signing."
             exit 0
           fi
           export GNUPGHOME="$(mktemp -d)"
@@ -58,13 +57,17 @@ jobs:
           RELEASE_GPG_KEY_ID: ${{ secrets.RELEASE_GPG_KEY_ID }}
           RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
         run: |
-          if [ -z "${GNUPGHOME:-}" ] || [ -z "${RELEASE_GPG_KEY_ID}" ] || [ -z "${RELEASE_GPG_PASSPHRASE}" ]; then
+          if [ -z "${GNUPGHOME:-}" ] || [ -z "${RELEASE_GPG_KEY_ID}" ]; then
             echo "Release signing is not configured for this run; skipping AppImage signing."
             exit 0
           fi
           cd dist
           for artifact in *.AppImage SHA256SUMS; do
-            gpg --batch --yes --pinentry-mode loopback --passphrase "$RELEASE_GPG_PASSPHRASE" --local-user "$RELEASE_GPG_KEY_ID" --armor --detach-sign "$artifact"
+            if [ -n "${RELEASE_GPG_PASSPHRASE}" ]; then
+              gpg --batch --yes --pinentry-mode loopback --passphrase "$RELEASE_GPG_PASSPHRASE" --local-user "$RELEASE_GPG_KEY_ID" --armor --detach-sign "$artifact"
+            else
+              gpg --batch --yes --local-user "$RELEASE_GPG_KEY_ID" --armor --detach-sign "$artifact"
+            fi
           done
       - uses: actions/upload-artifact@v4
         with:
