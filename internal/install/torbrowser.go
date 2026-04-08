@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"i2tor/internal/apppaths"
@@ -114,7 +116,12 @@ func installManagedTorBrowser(ctx context.Context, paths apppaths.AppPaths, allo
 	if err := VerifyTorBrowserDownload(ctx, paths, artifactPath, meta); err != nil {
 		return InstalledApp{}, err
 	}
-	installDir, err := extractManaged(ctx, artifactPath, paths.TorBrowserRuntimeDir)
+	var installDir string
+	if strings.HasSuffix(artifactPath, ".exe") {
+		installDir, err = runNSISInstaller(ctx, artifactPath, paths.TorBrowserRuntimeDir)
+	} else {
+		installDir, err = extractManaged(ctx, artifactPath, paths.TorBrowserRuntimeDir)
+	}
 	if err != nil {
 		return InstalledApp{}, err
 	}
@@ -229,6 +236,20 @@ func torBrowserMetadata(ctx context.Context) (downloader.ArtifactMetadata, error
 
 func LatestTorBrowserMetadata(ctx context.Context) (downloader.ArtifactMetadata, error) {
 	return torBrowserMetadata(ctx)
+}
+
+func runNSISInstaller(ctx context.Context, installerPath, installDir string) (string, error) {
+	if err := os.RemoveAll(installDir); err != nil {
+		return "", fmt.Errorf("clear previous install %q: %w", installDir, err)
+	}
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		return "", fmt.Errorf("create install directory %q: %w", installDir, err)
+	}
+	cmd := exec.CommandContext(ctx, installerPath, "/S", "/D="+installDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("run Tor Browser installer: %w: %s", err, string(output))
+	}
+	return installDir, nil
 }
 
 func extractManaged(ctx context.Context, artifactPath, targetDir string) (string, error) {

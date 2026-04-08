@@ -55,8 +55,26 @@ func keyByName(name string) (string, error) {
 	}
 }
 
+func resolveGPGBinary() string {
+	for _, name := range []string{"gpg", "gpg2"} {
+		if path, err := exec.LookPath(name); err == nil {
+			return path
+		}
+	}
+	// Common Gpg4win installation paths on Windows
+	for _, candidate := range []string{
+		`C:\Program Files (x86)\GnuPG\bin\gpg.exe`,
+		`C:\Program Files\GnuPG\bin\gpg.exe`,
+	} {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return "gpg"
+}
+
 func runGPG(ctx context.Context, home string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "gpg", append([]string{"--homedir", home}, args...)...)
+	cmd := exec.CommandContext(ctx, resolveGPGBinary(), append([]string{"--homedir", home}, args...)...)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
