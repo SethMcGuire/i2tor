@@ -1,7 +1,6 @@
 package install
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -201,13 +200,9 @@ func runI2PInstaller(ctx context.Context, java InstalledApp, installerJarPath, i
 	if err != nil {
 		return fmt.Errorf("resolve Java runtime for I2P installer: %w", err)
 	}
-	templatePath := filepath.Join(filepath.Dir(installDir), "i2p-installer-template.properties")
 	propsPath := filepath.Join(filepath.Dir(installDir), "i2p-installer.properties")
-	if err := exec.CommandContext(ctx, javaPath, "-jar", installerJarPath, "-options-template", templatePath).Run(); err != nil {
-		return fmt.Errorf("generate I2P installer properties template: %w", err)
-	}
-	if err := writeInstallerProperties(templatePath, propsPath, installDir); err != nil {
-		return err
+	if err := os.WriteFile(propsPath, []byte("INSTALL_PATH="+installDir+"\n"), 0o644); err != nil {
+		return fmt.Errorf("write I2P installer properties: %w", err)
 	}
 	cmd := exec.CommandContext(ctx, javaPath, "-jar", installerJarPath, "-options", propsPath)
 	cmd.Env = append(os.Environ(), "JAVA_TOOL_OPTIONS=-Djava.awt.headless=true")
@@ -215,36 +210,6 @@ func runI2PInstaller(ctx context.Context, java InstalledApp, installerJarPath, i
 		return fmt.Errorf("run unattended I2P installer into %s: %w: %s", installDir, err, strings.TrimSpace(string(output)))
 	}
 	return nil
-}
-
-func writeInstallerProperties(templatePath, destPath, installDir string) error {
-	template, err := os.Open(templatePath)
-	if err != nil {
-		return fmt.Errorf("open I2P installer template %q: %w", templatePath, err)
-	}
-	defer template.Close()
-
-	var lines []string
-	found := false
-	scanner := bufio.NewScanner(template)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "INSTALL_PATH=") || line == "INSTALL_PATH" {
-			lines = append(lines, "INSTALL_PATH="+installDir)
-			found = true
-			continue
-		}
-		if strings.TrimSpace(line) != "" {
-			lines = append(lines, line)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("read I2P installer template %q: %w", templatePath, err)
-	}
-	if !found {
-		lines = append(lines, "INSTALL_PATH="+installDir)
-	}
-	return os.WriteFile(destPath, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
 }
 
 func NormalizeManagedI2PPortableConfig(installDir string, java InstalledApp) error {
