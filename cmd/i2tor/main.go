@@ -299,7 +299,7 @@ func commandStatus(ctx context.Context, cfg config.Config, paths apppaths.AppPat
 func commandUpdate(ctx context.Context, logger *logging.Logger, cfg config.Config, paths apppaths.AppPaths, manifest *state.Manifest) error {
 	updates := []string{}
 	if manifest.TorBrowser.Source == "" || manifest.TorBrowser.Source == "managed" {
-		meta, err := install.LatestTorBrowserMetadata()
+		meta, err := install.LatestTorBrowserMetadata(ctx)
 		if err != nil {
 			return fmt.Errorf("resolve latest Tor Browser metadata: %w", err)
 		}

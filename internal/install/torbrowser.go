@@ -2,16 +2,24 @@ package install
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
+
 	"i2tor/internal/apppaths"
 	"i2tor/internal/detect"
 	"i2tor/internal/downloader"
 )
 
-const torBrowserVersion = "14.5.1"
+type torBrowserRelease struct {
+	Version string `json:"version"`
+	Binary  string `json:"binary"`
+	Sig     string `json:"sig"`
+}
 
 type InstalledApp struct {
 	Name              string
@@ -22,7 +30,7 @@ type InstalledApp struct {
 	ArtifactURL       string
 	ArtifactPath      string
 	ChecksumSHA256    string
-	SignatureVerified bool
+	SignatureVerified  bool
 	Verified          bool
 }
 
@@ -95,7 +103,7 @@ func installManagedTorBrowser(ctx context.Context, paths apppaths.AppPaths, allo
 		}
 	}
 
-	meta, err := torBrowserMetadata()
+	meta, err := torBrowserMetadata(ctx)
 	if err != nil {
 		return InstalledApp{}, err
 	}
@@ -115,16 +123,16 @@ func installManagedTorBrowser(ctx context.Context, paths apppaths.AppPaths, allo
 		return InstalledApp{}, err
 	}
 	return InstalledApp{
-		Name:              "tor-browser",
-		Source:            "managed",
-		Version:           meta.Version,
-		InstallDir:        installDir,
-		ExecutablePath:    execPath,
-		ArtifactURL:       meta.ArtifactURL,
-		ArtifactPath:      artifactPath,
-		ChecksumSHA256:    meta.ChecksumSHA256,
+		Name:             "tor-browser",
+		Source:           "managed",
+		Version:          meta.Version,
+		InstallDir:       installDir,
+		ExecutablePath:   execPath,
+		ArtifactURL:      meta.ArtifactURL,
+		ArtifactPath:     artifactPath,
+		ChecksumSHA256:   meta.ChecksumSHA256,
 		SignatureVerified: meta.SignatureURL != "",
-		Verified:          true,
+		Verified:         true,
 	}, nil
 }
 
@@ -139,11 +147,8 @@ func ReuseExistingTorBrowser(candidate detect.InstallCandidate) InstalledApp {
 }
 
 func VerifyTorBrowserDownload(ctx context.Context, paths apppaths.AppPaths, artifactPath string, metadata downloader.ArtifactMetadata) error {
-	if err := downloader.VerifySignedChecksum(ctx, paths.DownloadsDir, metadata); err != nil {
-		return fmt.Errorf("failed to verify Tor Browser signed checksum file for %q: %w", artifactPath, err)
-	}
-	if err := downloader.VerifySHA256(ctx, artifactPath, metadata); err != nil {
-		return fmt.Errorf("failed to verify Tor Browser checksum for %q: %w", artifactPath, err)
+	if err := downloader.VerifyDetachedSignature(ctx, paths.DownloadsDir, artifactPath, metadata); err != nil {
+		return fmt.Errorf("failed to verify Tor Browser signature for %q: %w", artifactPath, err)
 	}
 	return nil
 }
@@ -158,58 +163,72 @@ func ReuseManagedTorBrowser(paths apppaths.AppPaths) (InstalledApp, error) {
 	return app, nil
 }
 
-func torBrowserMetadata() (downloader.ArtifactMetadata, error) {
-	arch := runtime.GOARCH
-	osName := runtime.GOOS
-	switch osName {
+func torBrowserPlatform(goos, goarch string) (string, error) {
+	switch goos {
 	case "linux":
-		switch arch {
+		switch goarch {
 		case "amd64":
-			return downloader.ArtifactMetadata{
-				Name:           "tor-browser",
-				Version:        torBrowserVersion,
-				FileName:       fmt.Sprintf("tor-browser-linux-x86_64-%s.tar.xz", torBrowserVersion),
-				ArtifactURL:    fmt.Sprintf("https://www.torproject.org/dist/torbrowser/%s/tor-browser-linux-x86_64-%s.tar.xz", torBrowserVersion, torBrowserVersion),
-				ChecksumURL:    fmt.Sprintf("https://archive.torproject.org/tor-package-archive/torbrowser/%s/sha256sums-signed-build.txt", torBrowserVersion),
-				SignatureURL:   fmt.Sprintf("https://archive.torproject.org/tor-package-archive/torbrowser/%s/sha256sums-signed-build.txt.asc", torBrowserVersion),
-				SignatureKey:   "torbrowser",
-				ChecksumSHA256: "",
-			}, nil
+			return "linux-x86_64", nil
 		case "arm64":
-			return downloader.ArtifactMetadata{
-				Name:         "tor-browser",
-				Version:      torBrowserVersion,
-				FileName:     fmt.Sprintf("tor-browser-linux-arm64-%s.tar.xz", torBrowserVersion),
-				ArtifactURL:  fmt.Sprintf("https://www.torproject.org/dist/torbrowser/%s/tor-browser-linux-arm64-%s.tar.xz", torBrowserVersion, torBrowserVersion),
-				ChecksumURL:  fmt.Sprintf("https://archive.torproject.org/tor-package-archive/torbrowser/%s/sha256sums-signed-build.txt", torBrowserVersion),
-				SignatureURL: fmt.Sprintf("https://archive.torproject.org/tor-package-archive/torbrowser/%s/sha256sums-signed-build.txt.asc", torBrowserVersion),
-				SignatureKey: "torbrowser",
-			}, nil
+			return "linux-aarch64", nil
 		}
 	case "windows":
-		if arch == "amd64" {
-			return downloader.ArtifactMetadata{
-				Name:        "tor-browser",
-				Version:     torBrowserVersion,
-				FileName:    fmt.Sprintf("tor-browser-windows-x86_64-portable-%s.exe", torBrowserVersion),
-				ArtifactURL: fmt.Sprintf("https://www.torproject.org/dist/torbrowser/%s/tor-browser-windows-x86_64-portable-%s.exe", torBrowserVersion, torBrowserVersion),
-			}, nil
+		if goarch == "amd64" {
+			return "windows-x86_64", nil
 		}
 	case "darwin":
-		if arch == "amd64" || arch == "arm64" {
-			return downloader.ArtifactMetadata{
-				Name:        "tor-browser",
-				Version:     torBrowserVersion,
-				FileName:    fmt.Sprintf("TorBrowser-%s-macos_ALL.dmg", torBrowserVersion),
-				ArtifactURL: fmt.Sprintf("https://www.torproject.org/dist/torbrowser/%s/TorBrowser-%s-macos_ALL.dmg", torBrowserVersion, torBrowserVersion),
-			}, nil
-		}
+		return "macos", nil
 	}
-	return downloader.ArtifactMetadata{}, fmt.Errorf("unsupported Tor Browser platform %s/%s", osName, arch)
+	return "", fmt.Errorf("unsupported Tor Browser platform %s/%s", goos, goarch)
 }
 
-func LatestTorBrowserMetadata() (downloader.ArtifactMetadata, error) {
-	return torBrowserMetadata()
+func fetchTorBrowserRelease(ctx context.Context, goos, goarch string) (torBrowserRelease, error) {
+	platform, err := torBrowserPlatform(goos, goarch)
+	if err != nil {
+		return torBrowserRelease{}, err
+	}
+	url := fmt.Sprintf("https://aus1.torproject.org/torbrowser/update_3/release/download-%s.json", platform)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return torBrowserRelease{}, fmt.Errorf("create Tor Browser release request: %w", err)
+	}
+	req.Header.Set("User-Agent", "i2tor")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return torBrowserRelease{}, fmt.Errorf("fetch Tor Browser release metadata: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return torBrowserRelease{}, fmt.Errorf("fetch Tor Browser release metadata: unexpected status %s", resp.Status)
+	}
+	var release torBrowserRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return torBrowserRelease{}, fmt.Errorf("decode Tor Browser release metadata: %w", err)
+	}
+	if release.Version == "" || release.Binary == "" {
+		return torBrowserRelease{}, fmt.Errorf("incomplete Tor Browser release metadata from %s", url)
+	}
+	return release, nil
+}
+
+func torBrowserMetadata(ctx context.Context) (downloader.ArtifactMetadata, error) {
+	release, err := fetchTorBrowserRelease(ctx, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return downloader.ArtifactMetadata{}, fmt.Errorf("resolve latest Tor Browser release metadata: %w", err)
+	}
+	return downloader.ArtifactMetadata{
+		Name:         "tor-browser",
+		Version:      release.Version,
+		FileName:     filepath.Base(release.Binary),
+		ArtifactURL:  release.Binary,
+		SignatureURL: release.Sig,
+		SignatureKey: "torbrowser",
+	}, nil
+}
+
+func LatestTorBrowserMetadata(ctx context.Context) (downloader.ArtifactMetadata, error) {
+	return torBrowserMetadata(ctx)
 }
 
 func extractManaged(ctx context.Context, artifactPath, targetDir string) (string, error) {
@@ -248,4 +267,3 @@ func extractedRoot(tempDir string) (string, error) {
 	}
 	return tempDir, nil
 }
-

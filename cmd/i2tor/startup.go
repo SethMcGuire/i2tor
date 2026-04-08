@@ -97,7 +97,7 @@ func availableManagedUpdates(ctx context.Context, manifest state.Manifest) []str
 	updates := make([]string, 0, 3)
 
 	if manifest.TorBrowser.Source == "managed" {
-		if meta, err := install.LatestTorBrowserMetadata(); err == nil && meta.Version != "" && meta.Version != manifest.TorBrowser.Version {
+		if meta, err := install.LatestTorBrowserMetadata(ctx); err == nil && meta.Version != "" && meta.Version != manifest.TorBrowser.Version {
 			updates = append(updates, fmt.Sprintf("Tor Browser %s", meta.Version))
 		}
 	}
