@@ -28,13 +28,39 @@ cd i2tor-bin
 makepkg -si
 ```
 
-### Other Linux (AppImage)
+### Nix
 
-Download the latest AppImage from the [releases page](https://github.com/SethMcGuire/i2tor/releases), make it executable, and run it:
+```bash
+# run without installing
+nix run github:SethMcGuire/i2tor -- run
+
+# install into your profile
+nix profile install github:SethMcGuire/i2tor
+```
+
+Or in a NixOS/home-manager flake:
+
+```nix
+inputs.i2tor.url = "github:SethMcGuire/i2tor";
+# then add inputs.i2tor.packages.x86_64-linux.default to your packages
+```
+
+### Other Linux
+
+Download the latest release from the [releases page](https://github.com/SethMcGuire/i2tor/releases). A plain binary and an AppImage are both available.
+
+Plain binary:
+
+```bash
+chmod +x i2tor-*-linux-x86_64
+./i2tor-*-linux-x86_64 run
+```
+
+AppImage:
 
 ```bash
 chmod +x i2tor-*.AppImage
-./i2tor-*.AppImage
+./i2tor-*.AppImage run
 ```
 
 ## Build

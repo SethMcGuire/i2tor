@@ -1,6 +1,7 @@
 # Local build outputs
 /i2tor
 /dist/
+/result
 
 # Downloaded packaging tools
 /.tools/
