@@ -88,7 +88,7 @@ func ShutdownManagedI2P(ctx context.Context, proc ManagedProcess) error {
 		cmd.Dir = filepath.Dir(proc.Command)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			if proc.PID > 0 {
-				if killErr := syscall.Kill(proc.PID, syscall.SIGTERM); killErr == nil {
+				if killErr := terminatePID(proc.PID); killErr == nil {
 					return nil
 				}
 			}
@@ -100,7 +100,7 @@ func ShutdownManagedI2P(ctx context.Context, proc ManagedProcess) error {
 		if proc.PID <= 0 {
 			return nil
 		}
-		if err := syscall.Kill(proc.PID, syscall.SIGTERM); err != nil {
+		if err := terminatePID(proc.PID); err != nil {
 			return fmt.Errorf("terminate I2P pid %d: %w", proc.PID, err)
 		}
 		return nil

@@ -3,12 +3,10 @@ package runtime
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"sync"
-	"syscall"
 	"time"
 
 	"i2tor/internal/logging"
@@ -101,7 +99,3 @@ func ReconcileManagedProcessRecord(record state.ManagedProcessRecord) state.Mana
 	return state.ManagedProcessRecord{}
 }
 
-func processExists(pid int) bool {
-	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
-}
