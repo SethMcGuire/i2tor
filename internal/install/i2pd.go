@@ -204,10 +204,11 @@ func runI2PInstaller(ctx context.Context, java InstalledApp, installerJarPath, i
 	if err := os.WriteFile(propsPath, []byte("INSTALL_PATH="+installDir+"\n"), 0o644); err != nil {
 		return fmt.Errorf("write I2P installer properties: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, javaPath, "-jar", installerJarPath, "-options", propsPath)
-	cmd.Env = append(os.Environ(), "JAVA_TOOL_OPTIONS=-Djava.awt.headless=true")
+	installCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(installCtx, javaPath, "-Djava.awt.headless=true", "-jar", installerJarPath, "-options", propsPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("run unattended I2P installer into %s: %w: %s", installDir, err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("run unattended I2P installer into %s: %w: %s", installDir, strings.TrimSpace(string(output)), err)
 	}
 	return nil
 }

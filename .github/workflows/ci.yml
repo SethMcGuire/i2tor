@@ -54,6 +54,6 @@ jobs:
         env:
           CGO_ENABLED: "1"
       - name: Build launcher
-        run: go build ./cmd/i2tor
+        run: go build -ldflags="-H=windowsgui" -o i2tor.exe ./cmd/i2tor
         env:
           CGO_ENABLED: "1"

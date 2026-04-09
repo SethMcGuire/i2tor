@@ -24,9 +24,9 @@ const (
 )
 
 type launcherSession struct {
-	Browser rt.ManagedProcess
-	Tor     rt.ManagedProcess
-	I2P     rt.ManagedProcess
+	Browser  rt.ManagedProcess
+	Tor      rt.ManagedProcess
+	I2P      rt.ManagedProcess
 	ReuseI2P bool
 }
 

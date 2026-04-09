@@ -33,7 +33,7 @@ func main() {
 }
 
 func runCLI(ctx context.Context, args []string) int {
-	command := "run"
+	command := defaultCommand()
 	if len(args) > 0 {
 		command = args[0]
 	}
@@ -150,6 +150,14 @@ func runCLI(ctx context.Context, args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func defaultCommand() string {
+	switch util.NormalizedOS() {
+	case "windows", "linux":
+		return "gui"
+	}
+	return "run"
 }
 
 func commandRun(ctx context.Context, logger *logging.Logger, cfg config.Config, paths apppaths.AppPaths, manifest *state.Manifest) error {
@@ -642,4 +650,3 @@ func openPath(target string) error {
 	}
 	return nil
 }
-

@@ -69,6 +69,14 @@ chmod +x i2tor-*.AppImage
 go build ./cmd/i2tor
 ```
 
+Windows GUI build:
+
+```bash
+go build -ldflags="-H=windowsgui" -o i2tor.exe ./cmd/i2tor
+```
+
+On Windows, launching `i2tor.exe` with no arguments now defaults to `gui` instead of `run`.
+
 If your environment restricts the Go build cache, use:
 
 ```bash

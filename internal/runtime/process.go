@@ -98,4 +98,3 @@ func ReconcileManagedProcessRecord(record state.ManagedProcessRecord) state.Mana
 	}
 	return state.ManagedProcessRecord{}
 }
-

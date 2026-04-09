@@ -73,4 +73,3 @@ func isLockStale(path string) (bool, error) {
 	}
 	return !pidExists(pid), nil
 }
-

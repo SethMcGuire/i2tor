@@ -60,7 +60,7 @@ jobs:
       - name: Build Windows binary
         run: |
           mkdir -p dist
-          go build -o dist/i2tor.exe ./cmd/i2tor
+          go build -ldflags="-H=windowsgui" -o dist/i2tor.exe ./cmd/i2tor
         env:
           CGO_ENABLED: "1"
       - uses: actions/upload-artifact@v4

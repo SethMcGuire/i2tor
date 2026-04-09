@@ -32,7 +32,7 @@ type InstalledApp struct {
 	ArtifactURL       string
 	ArtifactPath      string
 	ChecksumSHA256    string
-	SignatureVerified  bool
+	SignatureVerified bool
 	Verified          bool
 }
 
@@ -130,16 +130,16 @@ func installManagedTorBrowser(ctx context.Context, paths apppaths.AppPaths, allo
 		return InstalledApp{}, err
 	}
 	return InstalledApp{
-		Name:             "tor-browser",
-		Source:           "managed",
-		Version:          meta.Version,
-		InstallDir:       installDir,
-		ExecutablePath:   execPath,
-		ArtifactURL:      meta.ArtifactURL,
-		ArtifactPath:     artifactPath,
-		ChecksumSHA256:   meta.ChecksumSHA256,
+		Name:              "tor-browser",
+		Source:            "managed",
+		Version:           meta.Version,
+		InstallDir:        installDir,
+		ExecutablePath:    execPath,
+		ArtifactURL:       meta.ArtifactURL,
+		ArtifactPath:      artifactPath,
+		ChecksumSHA256:    meta.ChecksumSHA256,
 		SignatureVerified: meta.SignatureURL != "",
-		Verified:         true,
+		Verified:          true,
 	}, nil
 }
 
