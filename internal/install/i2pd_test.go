@@ -27,6 +27,26 @@ func TestPickI2PAssetLinux(t *testing.T) {
 	}
 }
 
+func TestPickI2PAssetWindowsPrefersNativeInstaller(t *testing.T) {
+	t.Parallel()
+
+	release := i2pRelease{
+		TagName: "i2p-2.11.0",
+		Assets: []i2pReleaseAsset{
+			{Name: "i2pinstall_2.11.0.jar", BrowserDownloadURL: "https://example.invalid/i2pinstall_2.11.0.jar", Digest: "sha256:abc"},
+			{Name: "i2pinstall_2.11.0_windows.exe", BrowserDownloadURL: "https://example.invalid/i2pinstall_2.11.0_windows.exe", Digest: "sha256:def"},
+		},
+	}
+
+	asset, err := pickI2PAsset(release, "windows")
+	if err != nil {
+		t.Fatalf("pickI2PAsset() error = %v", err)
+	}
+	if asset.Name != "i2pinstall_2.11.0_windows.exe" {
+		t.Fatalf("asset.Name = %q", asset.Name)
+	}
+}
+
 func TestPickI2PAssetNoMatch(t *testing.T) {
 	t.Parallel()
 
@@ -128,5 +148,23 @@ I2PTEMP="/tmp/stage"
 		if !strings.Contains(wrapperContent, want) {
 			t.Fatalf("wrapper.config missing %q in %q", want, wrapperContent)
 		}
+	}
+}
+
+func TestResolveI2PExecutablePrefersWindowsLaunchers(t *testing.T) {
+	t.Parallel()
+
+	installDir := t.TempDir()
+	launcher := filepath.Join(installDir, "i2prouter.bat")
+	if err := os.WriteFile(launcher, []byte("@echo off\r\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile(i2prouter.bat) error = %v", err)
+	}
+
+	got, err := (InstalledApp{Name: "i2p", InstallDir: installDir}).ResolveExecutable()
+	if err != nil {
+		t.Fatalf("ResolveExecutable() error = %v", err)
+	}
+	if got != launcher {
+		t.Fatalf("ResolveExecutable() = %q, want %q", got, launcher)
 	}
 }

@@ -70,6 +70,8 @@ func (a InstalledApp) ResolveExecutable() (string, error) {
 	case "i2p":
 		for _, candidate := range []string{
 			filepath.Join(a.InstallDir, "i2prouter"),
+			filepath.Join(a.InstallDir, "i2prouter.bat"),
+			filepath.Join(a.InstallDir, "startRouter.bat"),
 			filepath.Join(a.InstallDir, "runplain.sh"),
 		} {
 			if stat, err := os.Stat(candidate); err == nil && !stat.IsDir() {
@@ -88,6 +90,18 @@ func (a InstalledApp) ResolveExecutable() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no executable found for %s in %q", a.Name, a.InstallDir)
+}
+
+func ResolveBundledTorExecutable(installDir string) (string, error) {
+	for _, candidate := range []string{
+		filepath.Join(installDir, "Browser", "TorBrowser", "Tor", "tor"),
+		filepath.Join(installDir, "Browser", "TorBrowser", "Tor", "tor.exe"),
+	} {
+		if stat, err := os.Stat(candidate); err == nil && !stat.IsDir() {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("no bundled Tor executable found in %q", installDir)
 }
 
 func InstallManagedTorBrowser(ctx context.Context, paths apppaths.AppPaths) (InstalledApp, error) {

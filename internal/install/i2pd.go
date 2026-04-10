@@ -15,17 +15,18 @@ import (
 	"i2tor/internal/apppaths"
 	"i2tor/internal/detect"
 	"i2tor/internal/downloader"
+	"i2tor/internal/logging"
 )
 
-func InstallManagedI2P(ctx context.Context, paths apppaths.AppPaths, java InstalledApp) (InstalledApp, error) {
-	return installManagedI2P(ctx, paths, java, true)
+func InstallManagedI2P(ctx context.Context, logger *logging.Logger, paths apppaths.AppPaths, java InstalledApp) (InstalledApp, error) {
+	return installManagedI2P(ctx, logger, paths, java, true)
 }
 
-func ReinstallManagedI2P(ctx context.Context, paths apppaths.AppPaths, java InstalledApp) (InstalledApp, error) {
-	return installManagedI2P(ctx, paths, java, false)
+func ReinstallManagedI2P(ctx context.Context, logger *logging.Logger, paths apppaths.AppPaths, java InstalledApp) (InstalledApp, error) {
+	return installManagedI2P(ctx, logger, paths, java, false)
 }
 
-func installManagedI2P(ctx context.Context, paths apppaths.AppPaths, java InstalledApp, allowReuse bool) (InstalledApp, error) {
+func installManagedI2P(ctx context.Context, logger *logging.Logger, paths apppaths.AppPaths, java InstalledApp, allowReuse bool) (InstalledApp, error) {
 	if allowReuse {
 		if existing, err := ReuseManagedI2P(paths); err == nil {
 			return existing, nil
@@ -36,12 +37,29 @@ func installManagedI2P(ctx context.Context, paths apppaths.AppPaths, java Instal
 	if err != nil {
 		return InstalledApp{}, err
 	}
+	if logger != nil {
+		logger.Info("install", "resolved managed I2P release metadata", map[string]any{
+			"version":  meta.Version,
+			"artifact": meta.FileName,
+			"url":      meta.ArtifactURL,
+		})
+	}
 	artifactPath, err := downloader.Download(ctx, paths.DownloadsDir, meta)
 	if err != nil {
 		return InstalledApp{}, fmt.Errorf("download I2P from %s: %w", meta.ArtifactURL, err)
 	}
+	if logger != nil {
+		logger.Info("install", "downloaded managed I2P artifact", map[string]any{"path": artifactPath})
+	}
 	if err := VerifyI2PDownload(ctx, paths, artifactPath, meta); err != nil {
 		return InstalledApp{}, err
+	}
+	if logger != nil {
+		logger.Info("install", "verified managed I2P artifact", map[string]any{
+			"path":               artifactPath,
+			"checksum_verified":  true,
+			"signature_verified": meta.SignatureURL != "",
+		})
 	}
 
 	parent := filepath.Dir(paths.I2PRuntimeDir)
@@ -50,8 +68,11 @@ func installManagedI2P(ctx context.Context, paths apppaths.AppPaths, java Instal
 		return InstalledApp{}, fmt.Errorf("create temp I2P install dir: %w", err)
 	}
 	defer os.RemoveAll(stageDir)
+	if logger != nil {
+		logger.Info("install", "created managed I2P staging directory", map[string]any{"path": stageDir})
+	}
 
-	if err := runI2PInstaller(ctx, java, artifactPath, stageDir); err != nil {
+	if err := runI2PInstaller(ctx, logger, java, artifactPath, stageDir); err != nil {
 		return InstalledApp{}, err
 	}
 	if err := os.RemoveAll(paths.I2PRuntimeDir); err != nil {
@@ -180,11 +201,6 @@ func fetchLatestI2PRelease(ctx context.Context) (i2pRelease, error) {
 }
 
 func pickI2PAsset(release i2pRelease, goos string) (i2pReleaseAsset, error) {
-	for _, asset := range release.Assets {
-		if strings.HasSuffix(asset.Name, ".jar") && strings.HasPrefix(asset.Name, "i2pinstall_") && !strings.Contains(asset.Name, "_windows") {
-			return asset, nil
-		}
-	}
 	if goos == "windows" {
 		for _, asset := range release.Assets {
 			if strings.HasSuffix(asset.Name, "_windows.exe") {
@@ -192,10 +208,29 @@ func pickI2PAsset(release i2pRelease, goos string) (i2pReleaseAsset, error) {
 			}
 		}
 	}
+	for _, asset := range release.Assets {
+		if strings.HasSuffix(asset.Name, ".jar") && strings.HasPrefix(asset.Name, "i2pinstall_") && !strings.Contains(asset.Name, "_windows") {
+			return asset, nil
+		}
+	}
 	return i2pReleaseAsset{}, fmt.Errorf("no supported I2P installer asset found in release %s", release.TagName)
 }
 
-func runI2PInstaller(ctx context.Context, java InstalledApp, installerJarPath, installDir string) error {
+func runI2PInstaller(ctx context.Context, logger *logging.Logger, java InstalledApp, installerPath, installDir string) error {
+	if strings.HasSuffix(strings.ToLower(installerPath), ".exe") {
+		if logger != nil {
+			logger.Info("install", "launching managed I2P Windows installer", map[string]any{
+				"installer":    installerPath,
+				"destination":  installDir,
+				"installer_os": "windows",
+			})
+		}
+		if _, err := runNSISInstaller(ctx, installerPath, installDir); err != nil {
+			return fmt.Errorf("run unattended I2P installer into %s: %w", installDir, err)
+		}
+		return nil
+	}
+
 	javaPath, err := java.ResolveExecutable()
 	if err != nil {
 		return fmt.Errorf("resolve Java runtime for I2P installer: %w", err)
@@ -206,9 +241,19 @@ func runI2PInstaller(ctx context.Context, java InstalledApp, installerJarPath, i
 	}
 	installCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(installCtx, javaPath, "-Djava.awt.headless=true", "-jar", installerJarPath, "-options", propsPath)
+	if logger != nil {
+		logger.Info("install", "launching managed I2P Java installer", map[string]any{
+			"installer":   installerPath,
+			"java":        javaPath,
+			"destination": installDir,
+		})
+	}
+	cmd := exec.CommandContext(installCtx, javaPath, "-Djava.awt.headless=true", "-jar", installerPath, "-options", propsPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("run unattended I2P installer into %s: %w: %s", installDir, strings.TrimSpace(string(output)), err)
+		return fmt.Errorf("run unattended I2P installer into %s: %w: %s", installDir, err, strings.TrimSpace(string(output)))
+	}
+	if logger != nil {
+		logger.Info("install", "managed I2P Java installer completed", map[string]any{"destination": installDir})
 	}
 	return nil
 }
@@ -251,19 +296,24 @@ func NormalizeManagedI2PPortableConfig(installDir string, java InstalledApp) err
 		return fmt.Errorf("write wrapper config %q: %w", wrapperPath, err)
 	}
 
-	routerPath := filepath.Join(installDir, "i2prouter")
-	routerLines, err := readLines(routerPath)
-	if err != nil {
-		return fmt.Errorf("read i2prouter script %q: %w", routerPath, err)
-	}
-	routerLines = replaceInstallPathReferences(routerLines, installDir)
-	routerLines = replaceAllConfigLines(routerLines, "I2P=", fmt.Sprintf("I2P=%q", installDir))
-	routerLines = replaceAllConfigLines(routerLines, "I2P_CONFIG_DIR=", fmt.Sprintf("I2P_CONFIG_DIR=%q", installDir))
-	routerLines = replaceAllConfigLines(routerLines, "I2PTEMP=", fmt.Sprintf("I2PTEMP=%q", installDir))
-	routerLines = replaceAllConfigLines(routerLines, "PIDDIR=", fmt.Sprintf("PIDDIR=%q", installDir))
-	routerLines = replaceAllConfigLines(routerLines, "LOGDIR=", fmt.Sprintf("LOGDIR=%q", installDir))
-	if err := os.WriteFile(routerPath, []byte(strings.Join(routerLines, "\n")+"\n"), 0o755); err != nil {
-		return fmt.Errorf("write i2prouter script %q: %w", routerPath, err)
+	for _, routerName := range []string{"i2prouter", "i2prouter.bat"} {
+		routerPath := filepath.Join(installDir, routerName)
+		routerLines, err := readLines(routerPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("read I2P launcher script %q: %w", routerPath, err)
+		}
+		routerLines = replaceInstallPathReferences(routerLines, installDir)
+		routerLines = replaceAllConfigLines(routerLines, "I2P=", fmt.Sprintf("I2P=%q", installDir))
+		routerLines = replaceAllConfigLines(routerLines, "I2P_CONFIG_DIR=", fmt.Sprintf("I2P_CONFIG_DIR=%q", installDir))
+		routerLines = replaceAllConfigLines(routerLines, "I2PTEMP=", fmt.Sprintf("I2PTEMP=%q", installDir))
+		routerLines = replaceAllConfigLines(routerLines, "PIDDIR=", fmt.Sprintf("PIDDIR=%q", installDir))
+		routerLines = replaceAllConfigLines(routerLines, "LOGDIR=", fmt.Sprintf("LOGDIR=%q", installDir))
+		if err := os.WriteFile(routerPath, []byte(strings.Join(routerLines, "\n")+"\n"), 0o755); err != nil {
+			return fmt.Errorf("write I2P launcher script %q: %w", routerPath, err)
+		}
 	}
 
 	for _, scriptName := range []string{"runplain.sh", "eepget"} {

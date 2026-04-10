@@ -33,16 +33,21 @@ func DetectExistingI2P(ctx context.Context) (InstallCandidate, error) {
 		}
 	}
 	for _, candidate := range candidates {
-		execPath := filepath.Join(candidate, "i2prouter")
-		if stat, err := os.Stat(execPath); err == nil && !stat.IsDir() {
-			return InstallCandidate{
-				Name:          "i2p",
-				Source:        "existing",
-				RootPath:      candidate,
-				Executable:    execPath,
-				ReadOnly:      true,
-				DetectionHint: "heuristic path match",
-			}, nil
+		for _, execPath := range []string{
+			filepath.Join(candidate, "i2prouter"),
+			filepath.Join(candidate, "i2prouter.bat"),
+			filepath.Join(candidate, "startRouter.bat"),
+		} {
+			if stat, err := os.Stat(execPath); err == nil && !stat.IsDir() {
+				return InstallCandidate{
+					Name:          "i2p",
+					Source:        "existing",
+					RootPath:      candidate,
+					Executable:    execPath,
+					ReadOnly:      true,
+					DetectionHint: "heuristic path match",
+				}, nil
+			}
 		}
 	}
 	return InstallCandidate{}, errors.New("no existing I2P install detected")

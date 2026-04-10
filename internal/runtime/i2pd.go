@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -23,24 +24,29 @@ func StartI2P(ctx context.Context, logger *logging.Logger, i2pInstall, javaInsta
 		return ManagedProcess{}, fmt.Errorf("prepare managed I2P client config: %w", err)
 	}
 
-	scriptPath := filepath.Join(i2pInstall.InstallDir, "i2prouter")
-	if _, err := os.Stat(scriptPath); err != nil {
-		return ManagedProcess{}, fmt.Errorf("resolve managed I2P launcher %q: %w", scriptPath, err)
+	commandPath, commandArgs, launcherPath, err := managedI2PLaunchCommand(i2pInstall)
+	if err != nil {
+		return ManagedProcess{}, err
 	}
 
 	if err := os.Remove(filepath.Join(i2pInstall.InstallDir, "i2p.pid")); err != nil && !os.IsNotExist(err) {
 		return ManagedProcess{}, fmt.Errorf("clear stale I2P pid file: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, scriptPath, "start")
+	cmd := exec.CommandContext(ctx, commandPath, commandArgs...)
 	cmd.Dir = i2pInstall.InstallDir
 	cmd.Env = os.Environ()
 	output, err := cmd.CombinedOutput()
 	if logger != nil {
-		logger.Info("i2p", "i2prouter start output", map[string]any{"output": string(output)})
+		logger.Info("i2p", "i2prouter start output", map[string]any{
+			"command":  commandPath,
+			"args":     commandArgs,
+			"launcher": launcherPath,
+			"output":   string(output),
+		})
 	}
 	if err != nil {
-		return ManagedProcess{}, fmt.Errorf("run managed I2P launcher %q start: %w: %s", scriptPath, err, string(output))
+		return ManagedProcess{}, fmt.Errorf("run managed I2P launcher %q via %q %v: %w: %s", launcherPath, commandPath, commandArgs, err, string(output))
 	}
 
 	pid, err := waitForPIDFile(ctx, filepath.Join(i2pInstall.InstallDir, "i2p.pid"), 10*time.Second)
@@ -50,7 +56,7 @@ func StartI2P(ctx context.Context, logger *logging.Logger, i2pInstall, javaInsta
 
 	return ManagedProcess{
 		Name:      "i2p",
-		Command:   scriptPath,
+		Command:   launcherPath,
 		Args:      []string{"start"},
 		PID:       pid,
 		StartedAt: time.Now().UTC(),
@@ -83,8 +89,9 @@ func ShutdownManagedI2P(ctx context.Context, proc ManagedProcess) error {
 	if !proc.Owned {
 		return nil
 	}
-	if filepath.Base(proc.Command) == "i2prouter" {
-		cmd := exec.CommandContext(ctx, proc.Command, "stop")
+	if isI2PRouterLauncher(proc.Command) {
+		stopCommand, stopArgs := managedI2PStopCommand(proc.Command)
+		cmd := exec.CommandContext(ctx, stopCommand, stopArgs...)
 		cmd.Dir = filepath.Dir(proc.Command)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			if proc.PID > 0 {
@@ -92,7 +99,7 @@ func ShutdownManagedI2P(ctx context.Context, proc ManagedProcess) error {
 					return nil
 				}
 			}
-			return fmt.Errorf("stop managed I2P with %q stop: %w: %s", proc.Command, err, string(output))
+			return fmt.Errorf("stop managed I2P with %q %v: %w: %s", stopCommand, stopArgs, err, string(output))
 		}
 		return nil
 	}
@@ -116,6 +123,29 @@ func ShutdownManagedI2P(ctx context.Context, proc ManagedProcess) error {
 	case <-done:
 		return nil
 	}
+}
+
+func managedI2PLaunchCommand(i2pInstall install.InstalledApp) (string, []string, string, error) {
+	launcherPath, err := i2pInstall.ResolveExecutable()
+	if err != nil {
+		return "", nil, "", fmt.Errorf("resolve managed I2P launcher in %q: %w", i2pInstall.InstallDir, err)
+	}
+	if runtime.GOOS == "windows" && strings.HasSuffix(strings.ToLower(launcherPath), ".bat") {
+		return "cmd", []string{"/C", launcherPath, "start"}, launcherPath, nil
+	}
+	return launcherPath, []string{"start"}, launcherPath, nil
+}
+
+func managedI2PStopCommand(command string) (string, []string) {
+	if runtime.GOOS == "windows" && strings.HasSuffix(strings.ToLower(command), ".bat") {
+		return "cmd", []string{"/C", command, "stop"}
+	}
+	return command, []string{"stop"}
+}
+
+func isI2PRouterLauncher(command string) bool {
+	base := strings.ToLower(filepath.Base(command))
+	return base == "i2prouter" || base == "i2prouter.bat"
 }
 
 func waitForPIDFile(ctx context.Context, pidFile string, timeout time.Duration) (int, error) {

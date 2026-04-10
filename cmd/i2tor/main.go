@@ -277,7 +277,7 @@ func resolveI2P(ctx context.Context, logger *logging.Logger, cfg config.Config, 
 			return app, nil
 		}
 	}
-	app, err := install.InstallManagedI2P(ctx, paths, java)
+	app, err := install.InstallManagedI2P(ctx, logger, paths, java)
 	if err != nil {
 		return install.InstalledApp{}, fmt.Errorf("ensure I2P exists or install it: %w", err)
 	}
@@ -346,7 +346,7 @@ func commandUpdate(ctx context.Context, logger *logging.Logger, cfg config.Confi
 			return fmt.Errorf("resolve latest I2P metadata: %w", err)
 		}
 		if manifest.I2P.Version != meta.Version || manifest.I2P.Source == "" {
-			app, err := install.ReinstallManagedI2P(ctx, paths, javaInstall)
+			app, err := install.ReinstallManagedI2P(ctx, logger, paths, javaInstall)
 			if err != nil {
 				return fmt.Errorf("update I2P to %s: %w", meta.Version, err)
 			}

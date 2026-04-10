@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 
 	"i2tor/internal/apppaths"
 	"i2tor/internal/install"
@@ -51,7 +50,10 @@ func StartBundledTor(ctx context.Context, logger *logging.Logger, torBrowser ins
 	torDir := filepath.Join(browserDir, "TorBrowser", "Tor")
 	bundleDataDir := filepath.Join(browserDir, "TorBrowser", "Data", "Tor")
 	dataDir := filepath.Join(paths.RuntimeDir, "tor-data")
-	torBinary := filepath.Join(torDir, "tor")
+	torBinary, err := install.ResolveBundledTorExecutable(root)
+	if err != nil {
+		return ManagedProcess{}, fmt.Errorf("resolve bundled Tor executable: %w", err)
+	}
 	defaultsTorrc := filepath.Join(bundleDataDir, "torrc-defaults")
 	launcherTorrc := filepath.Join(paths.StateDir, "tor-launcherrc")
 
@@ -68,10 +70,13 @@ func StartBundledTor(ctx context.Context, logger *logging.Logger, torBrowser ins
 		return ManagedProcess{}, fmt.Errorf("write launcher torrc %q: %w", launcherTorrc, err)
 	}
 
-	env := append(os.Environ(),
-		"LD_LIBRARY_PATH="+strings.Join([]string{torDir, filepath.Join(torDir, "libstdc++")}, string(os.PathListSeparator)),
-		"HOME="+root,
-	)
+	env := os.Environ()
+	if runtime.GOOS == "linux" {
+		env = append(env,
+			"LD_LIBRARY_PATH="+strings.Join([]string{torDir, filepath.Join(torDir, "libstdc++")}, string(os.PathListSeparator)),
+			"HOME="+root,
+		)
+	}
 	args := []string{
 		"--defaults-torrc", defaultsTorrc,
 		"-f", launcherTorrc,
@@ -80,11 +85,17 @@ func StartBundledTor(ctx context.Context, logger *logging.Logger, torBrowser ins
 }
 
 func ShutdownManagedTor(ctx context.Context, proc ManagedProcess) error {
-	if !proc.Owned || proc.Cmd == nil || proc.Cmd.Process == nil {
+	if !proc.Owned {
 		return nil
 	}
-	if err := proc.Cmd.Process.Signal(syscall.SIGTERM); err != nil {
+	if proc.PID <= 0 {
+		return nil
+	}
+	if err := terminatePID(proc.PID); err != nil {
 		return fmt.Errorf("terminate Tor pid %d: %w", proc.PID, err)
+	}
+	if proc.Cmd == nil {
+		return nil
 	}
 	done := make(chan error, 1)
 	go func() { done <- proc.Cmd.Wait() }()
