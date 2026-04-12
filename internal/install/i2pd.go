@@ -201,16 +201,16 @@ func fetchLatestI2PRelease(ctx context.Context) (i2pRelease, error) {
 }
 
 func pickI2PAsset(release i2pRelease, goos string) (i2pReleaseAsset, error) {
+	for _, asset := range release.Assets {
+		if strings.HasSuffix(asset.Name, ".jar") && strings.HasPrefix(asset.Name, "i2pinstall_") && !strings.Contains(asset.Name, "_windows") {
+			return asset, nil
+		}
+	}
 	if goos == "windows" {
 		for _, asset := range release.Assets {
 			if strings.HasSuffix(asset.Name, "_windows.exe") {
 				return asset, nil
 			}
-		}
-	}
-	for _, asset := range release.Assets {
-		if strings.HasSuffix(asset.Name, ".jar") && strings.HasPrefix(asset.Name, "i2pinstall_") && !strings.Contains(asset.Name, "_windows") {
-			return asset, nil
 		}
 	}
 	return i2pReleaseAsset{}, fmt.Errorf("no supported I2P installer asset found in release %s", release.TagName)
@@ -279,7 +279,7 @@ func NormalizeManagedI2PPortableConfig(installDir string, java InstalledApp) err
 	}
 	wrapperLines = replaceInstallPathReferences(wrapperLines, installDir)
 	wrapperLines = setConfigLine(wrapperLines, "set.JAVA_HOME=", "set.JAVA_HOME="+javaHome)
-	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.command=", "wrapper.java.command="+javaPath)
+	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.command=", "wrapper.java.command="+wrapperJavaCommand(runtime.GOOS, javaPath, javaHome))
 	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.classpath.1=", "wrapper.java.classpath.1="+filepath.Join(installDir, "lib", "*.jar"))
 	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.library.path.1=", "wrapper.java.library.path.1="+installDir)
 	wrapperLines = setConfigLine(wrapperLines, "wrapper.java.library.path.2=", "wrapper.java.library.path.2="+filepath.Join(installDir, "lib"))
@@ -414,4 +414,11 @@ func rewriteInstallPathReference(line, installDir string) string {
 		return line[:start] + installDir + line[end:]
 	}
 	return line
+}
+
+func wrapperJavaCommand(goos, javaPath, javaHome string) string {
+	if goos == "windows" {
+		return `%JAVA_HOME%/bin/java.exe`
+	}
+	return javaPath
 }

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>i2tor</title>
+  <meta
+    name="description"
+    content="i2tor is a Linux-first desktop launcher that keeps Tor Browser upstream while routing .i2p traffic through a local I2P proxy."
+  >
+  <link rel="icon" href="./i2tor.ico" type="image/x-icon">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand" href="#top" aria-label="i2tor home">
+          <img src="./i2tor.png" alt="" width="36" height="36">
+          <span>i2tor</span>
+        </a>
+        <div class="nav-links">
+          <a href="#install">Install</a>
+          <a href="#how">How it works</a>
+          <a href="#security">Security</a>
+          <a href="https://github.com/SethMcGuire/i2tor">GitHub</a>
+        </div>
+      </nav>
+
+      <section class="hero-copy" id="top">
+        <p class="eyebrow">Tor Browser plus I2P, without a browser fork</p>
+        <h1>Route <code>.i2p</code> through I2P and keep everything else on Tor Browser.</h1>
+        <p class="lede">
+          <code>i2tor</code> is a Go desktop launcher that composes Tor Browser and Java I2P without
+          patching Tor Browser, forking its source, or changing system-wide proxy settings.
+        </p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#install">Install</a>
+          <a class="button button-secondary" href="https://github.com/SethMcGuire/i2tor/releases">Latest release</a>
+        </div>
+        <p class="supporting-note">
+          Independent project. Not affiliated with, endorsed by, or sponsored by the Tor Project or the I2P Project.
+        </p>
+      </section>
+    </header>
+
+    <main>
+      <section class="summary-grid" aria-label="Project summary">
+        <article class="summary-card">
+          <h2>Upstream-first</h2>
+          <p>
+            <code>i2tor</code> launches an isolated Tor Browser profile instead of maintaining a custom browser fork.
+          </p>
+        </article>
+        <article class="summary-card">
+          <h2>Fail-closed routing</h2>
+          <p>
+            It generates a PAC file so <code>.i2p</code> goes to the local I2P HTTP proxy and other traffic stays on Tor Browser.
+          </p>
+        </article>
+        <article class="summary-card">
+          <h2>Linux-first packaging</h2>
+          <p>
+            The current product path targets Linux, with AppImage, AUR, and Nix install options.
+          </p>
+        </article>
+      </section>
+
+      <section class="content-section" id="install">
+        <div class="section-heading">
+          <p class="eyebrow">Install</p>
+          <h2>Pick the Linux path that matches your setup.</h2>
+        </div>
+
+        <div class="install-grid">
+          <article class="install-card featured">
+            <h3>AppImage</h3>
+            <p>The primary desktop package. Download it from GitHub Releases and run the native GUI.</p>
+            <pre><code>chmod +x i2tor-*.AppImage
+./i2tor-*.AppImage run</code></pre>
+            <a class="inline-link" href="https://github.com/SethMcGuire/i2tor/releases">Open releases</a>
+          </article>
+
+          <article class="install-card">
+            <h3>Arch Linux (AUR)</h3>
+            <p>The recommended Arch package is <code>i2tor-bin</code>.</p>
+            <pre><code>yay -S i2tor-bin</code></pre>
+          </article>
+
+          <article class="install-card">
+            <h3>Nix</h3>
+            <p>Run directly or install into your profile.</p>
+            <pre><code>nix run github:SethMcGuire/i2tor -- run
+nix profile install github:SethMcGuire/i2tor</code></pre>
+          </article>
+
+          <article class="install-card">
+            <h3>Plain binary</h3>
+            <p>If you do not want the AppImage, use the Linux release binary.</p>
+            <pre><code>chmod +x i2tor-*-linux-x86_64
+./i2tor-*-linux-x86_64 run</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-section two-column" id="how">
+        <div>
+          <div class="section-heading">
+            <p class="eyebrow">How It Works</p>
+            <h2>A launcher, not a browser fork.</h2>
+          </div>
+          <p>
+            <code>i2tor</code> owns a dedicated Tor Browser profile, starts I2P, waits for the local
+            I2P HTTP proxy at <code>127.0.0.1:4444</code>, starts the bundled Tor daemon from Tor Browser,
+            waits for the SOCKS proxy at <code>127.0.0.1:9150</code>, writes <code>proxy.pac</code>, and then launches the browser.
+          </p>
+          <p>
+            If I2P is not ready, the browser is not launched. That keeps <code>.i2p</code> from silently falling back somewhere else.
+          </p>
+        </div>
+
+        <div class="flow-card">
+          <h3>Launch sequence</h3>
+          <ol>
+            <li>Resolve paths, config, and launcher state</li>
+            <li>Reuse or install Tor Browser, Java, and I2P</li>
+            <li>Start I2P and wait for the HTTP proxy</li>
+            <li>Start bundled Tor and wait for the SOCKS proxy</li>
+            <li>Write the PAC file and dedicated browser profile</li>
+            <li>Launch the browser and clean up launcher-owned processes on exit</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="content-section" id="security">
+        <div class="section-heading">
+          <p class="eyebrow">Security And Limits</p>
+          <h2>Clear boundaries matter here.</h2>
+        </div>
+
+        <div class="security-grid">
+          <article class="security-card">
+            <h3>Managed installs</h3>
+            <p>
+              Downloads are verified before extraction or execution, and extraction rejects unsafe archive paths.
+            </p>
+          </article>
+          <article class="security-card">
+            <h3>No system proxy changes</h3>
+            <p>
+              Routing stays inside the launcher-managed browser profile instead of touching system-wide proxy settings.
+            </p>
+          </article>
+          <article class="security-card">
+            <h3>Linux-first</h3>
+            <p>
+              Windows and macOS paths exist in the codebase, but Linux is the primary implementation target right now.
+            </p>
+          </article>
+          <article class="security-card">
+            <h3>Advanced options stay opt-in</h3>
+            <p>
+              Localhost access is off by default because it weakens the normal local-service isolation posture.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-section cta-section">
+        <div>
+          <p class="eyebrow">Project Links</p>
+          <h2>Read the code, releases, and packaging details.</h2>
+        </div>
+        <div class="cta-links">
+          <a class="button button-primary" href="https://github.com/SethMcGuire/i2tor">Repository</a>
+          <a class="button button-secondary" href="https://github.com/SethMcGuire/i2tor/releases">Releases</a>
+          <a class="button button-secondary" href="https://aur.archlinux.org/packages/i2tor-bin">AUR package</a>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
