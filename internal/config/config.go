@@ -16,6 +16,7 @@ type Config struct {
 	AutoStartOnLaunch       bool   `json:"auto_start_on_launch"`
 	AllowLocalhostAccess    bool   `json:"allow_localhost_access"`
 	KeepI2PRunning          bool   `json:"keep_i2p_running"`
+	EnableLogging           bool   `json:"enable_logging"`
 	DataDir                 string `json:"data_dir"`
 	LogLevel                string `json:"log_level"`
 }
@@ -27,6 +28,7 @@ func Default() Config {
 		AutoCheckUpdates:        true,
 		AutoStartOnLaunch:       false,
 		KeepI2PRunning:          false,
+		EnableLogging:           false,
 		LogLevel:                "info",
 	}
 }

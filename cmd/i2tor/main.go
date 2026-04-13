@@ -53,13 +53,6 @@ func runCLI(ctx context.Context, args []string) int {
 		defer lock.Release()
 	}
 
-	logger, err := logging.New(ctx, initialPaths.CurrentLogFile, "info")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
-		return 1
-	}
-	defer logger.Close()
-
 	cfg, err := config.Load(ctx, initialPaths.ConfigPath)
 	if err != nil {
 		fail(os.Stderr, "load config", err, initialPaths.CurrentLogFile, "Fix state/config.json or remove it to regenerate defaults.")
@@ -72,6 +65,16 @@ func runCLI(ctx context.Context, args []string) int {
 	if err != nil {
 		fail(os.Stderr, "resolve app paths", err, initialPaths.CurrentLogFile, "Verify the configured data_dir is writable.")
 		return 1
+	}
+
+	var logger *logging.Logger
+	if cfg.EnableLogging {
+		logger, err = logging.New(ctx, paths.CurrentLogFile, cfg.LogLevel)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
+			return 1
+		}
+		defer logger.Close()
 	}
 
 	logger.Info("main", "starting command", map[string]any{"command": command})

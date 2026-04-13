@@ -66,11 +66,14 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 	startButton := widget.NewButtonWithIcon("Start Browser", theme.MediaPlayIcon(), nil)
 	startButton.Importance = widget.HighImportance
 	startNowButton := widget.NewButtonWithIcon("Start Without Updating", theme.MediaFastForwardIcon(), nil)
-	logsButton := widget.NewButtonWithIcon("Open Logs", theme.FolderOpenIcon(), func() {
+	logsButton := widget.NewButtonWithIcon("Open Logs Folder", theme.FolderOpenIcon(), func() {
 		if err := openPath(paths.LogsDir); err != nil {
 			showErrorDialog(w, err)
 		}
 	})
+	if !cfg.EnableLogging {
+		logsButton.Hide()
+	}
 	dataDirButton := widget.NewButtonWithIcon("Open Data Folder", theme.FolderOpenIcon(), func() {
 		if err := openPath(paths.Root); err != nil {
 			showErrorDialog(w, err)
@@ -98,6 +101,8 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 	localhostToggle.Checked = cfg.AllowLocalhostAccess
 	keepI2PRunningToggle := widget.NewCheck("Keep managed I2P running after the browser closes", nil)
 	keepI2PRunningToggle.Checked = cfg.KeepI2PRunning
+	enableLoggingToggle := widget.NewCheck("Enable diagnostic logging to disk", nil)
+	enableLoggingToggle.Checked = cfg.EnableLogging
 
 	saveConfigField := func(field string, update func(*config.Config), revert func()) func(bool) {
 		return func(_ bool) {
@@ -131,6 +136,14 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 	keepI2PRunningToggle.OnChanged = saveConfigField("Keep I2P running", func(next *config.Config) {
 		next.KeepI2PRunning = keepI2PRunningToggle.Checked
 	}, func() { keepI2PRunningToggle.SetChecked(cfg.KeepI2PRunning) })
+	enableLoggingToggle.OnChanged = saveConfigField("Diagnostic logging", func(next *config.Config) {
+		next.EnableLogging = enableLoggingToggle.Checked
+		if enableLoggingToggle.Checked {
+			logsButton.Show()
+		} else {
+			logsButton.Hide()
+		}
+	}, func() { enableLoggingToggle.SetChecked(cfg.EnableLogging) })
 
 	heroCard := widget.NewCard(
 		"",
@@ -169,6 +182,7 @@ func commandNativeGUI(ctx context.Context, logger *logging.Logger, cfg config.Co
 			reuseI2PToggle,
 			localhostToggle,
 			keepI2PRunningToggle,
+			enableLoggingToggle,
 			localhostWarning,
 			lastSettingMessage,
 		),

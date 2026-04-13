@@ -60,12 +60,14 @@ func Resolve(ctx context.Context, configuredRoot string) (AppPaths, error) {
 		paths.JavaRuntimeDir,
 		paths.ProfileDir,
 		paths.PACDir,
-		paths.LogsDir,
 		paths.StateDir,
 	} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return AppPaths{}, fmt.Errorf("create app directory %q: %w", dir, err)
 		}
+	}
+	if err := os.MkdirAll(paths.LogsDir, 0o700); err != nil {
+		return AppPaths{}, fmt.Errorf("create log directory %q: %w", paths.LogsDir, err)
 	}
 
 	return paths, nil

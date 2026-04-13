@@ -24,6 +24,9 @@ func TestDefault(t *testing.T) {
 	if cfg.KeepI2PRunning {
 		t.Fatalf("KeepI2PRunning = true, want false")
 	}
+	if cfg.EnableLogging {
+		t.Fatalf("EnableLogging = true, want false")
+	}
 	if cfg.LogLevel != "info" {
 		t.Fatalf("LogLevel = %q, want info", cfg.LogLevel)
 	}
