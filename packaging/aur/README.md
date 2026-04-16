@@ -1,19 +1,19 @@
 # AUR Packaging
 
-The recommended Arch package is `i2tor-bin`, built from the GitHub release AppImage rather than from source.
+The recommended Arch package is `i2tor-bin`, built from the GitHub release Linux binary rather than from source.
 
 ## Release artifact contract
 
 The AUR package expects Linux release assets with this stable naming pattern:
 
-- `i2tor-<version>-linux-x86_64.AppImage`
+- `i2tor-<version>-linux-x86_64`
+- `i2tor-<version>-linux-x86_64.asc`
 - `SHA256SUMS`
-- `i2tor-<version>-linux-x86_64.AppImage.asc`
 - `SHA256SUMS.asc`
 
 Example:
 
-- `i2tor-0.1.0-linux-x86_64.AppImage`
+- `i2tor-0.1.0-linux-x86_64`
 
 ## Update process
 
@@ -21,9 +21,9 @@ For each new release:
 
 1. Publish a GitHub release tag like `v0.1.0`
 2. Confirm the release includes:
-   - the AppImage
+   - the Linux binary
    - `SHA256SUMS`
-   - the detached GPG signatures for both
+   - the detached GPG signatures for the binary and checksums
 3. Update [PKGBUILD](/home/seth/Documents/i2tor/packaging/aur/i2tor-bin/PKGBUILD):
    - `pkgver`
    - `sha256sums`
@@ -55,7 +55,7 @@ When those secrets are present, the workflow publishes detached armored signatur
 `i2tor-bin` is the better first Arch package because:
 
 - release artifacts already exist
-- the native GUI path depends on desktop libraries that are easier to validate in the packaged AppImage flow
+- the native GUI path depends on desktop libraries that are easier to validate in the packaged release-binary flow
 - users get the same tested artifact as GitHub release users
 
 Source-based Arch packaging can come later if needed.

@@ -18,13 +18,13 @@
 
 buildGoModule rec {
   pname = "i2tor";
-  version = "0.1.1";
+  version = "0.1.8";
 
   src = fetchFromGitHub {
     owner = "SethMcGuire";
     repo = "i2tor";
     rev = "v${version}";
-    hash = "sha256-iQ6NC+vgLdaDSiCgk2ZCJww563/x6+aNBpFlHx54BhU=";
+    hash = "sha256-rbzonene9x0tQfaTA7giMkwUOiRE96LhhL9jESt+HWM=";
   };
 
   vendorHash = "sha256-CKWoyoZntkOpPi3Wvwmdi5U7CitfWE7x5ZQT72mG1iE=";

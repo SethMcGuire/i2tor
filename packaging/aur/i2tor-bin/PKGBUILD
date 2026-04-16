@@ -1,5 +1,5 @@
 pkgname=i2tor-bin
-pkgver=0.1.1
+pkgver=0.1.8
 pkgrel=1
 pkgdesc='Desktop launcher that combines Tor Browser and Java I2P'
 arch=('x86_64')
